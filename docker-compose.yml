@@ -1,0 +1,89 @@
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build: .
+    depends_on:
+      - redis
+    environment:
+      - FLASK_APP=manage:flask_app
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - TASK_IGNORE_RESULT=True
+      - BEAT_SCHEDULE=120
+    command: celery -A manage worker --loglevel=info
+    volumes:
+      - .:/app
+
+  beat:
+    build: .
+    depends_on:
+      - redis
+    environment:
+      - FLASK_APP=manage:flask_app
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - TASK_IGNORE_RESULT=True
+      - BEAT_SCHEDULE=120
+    command: celery -A manage beat --loglevel=info
+    volumes:
+      - .:/app
+
+  flower:
+    build: .
+    depends_on:
+      - redis
+      - worker
+    ports:
+      - "5555:5555"
+    environment:
+      - FLASK_APP=manage:flask_app
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - TASK_IGNORE_RESULT=True
+      - BEAT_SCHEDULE=120
+    command: celery -A manage flower --port=5555
+    volumes:
+      - .:/app
+
+  db:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    env_file:
+      - .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U whispercore"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
