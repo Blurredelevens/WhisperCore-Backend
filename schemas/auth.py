@@ -36,6 +36,7 @@ class UserResponse(UserBase, TimestampMixin):
     is_active: bool
     email_verified: bool
     last_login: Optional[str] = None
+    image_path: Optional[str] = None
     
 
 class UserDetailResponse(UserResponse):

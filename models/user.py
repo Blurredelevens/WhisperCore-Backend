@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from extensions import db
 from werkzeug.security import generate_password_hash, check_password_hash
-import secrets
+from cryptography.fernet import Fernet
 
 class User(db.Model):
     """User model for authentication and profile management."""
@@ -10,6 +10,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
+    image_path = db.Column(db.String(255))
     
     # Profile fields
     first_name = db.Column(db.String(50), nullable=False)
@@ -35,6 +36,9 @@ class User(db.Model):
     # Relationships
     memories = db.relationship('Memory', backref='user', lazy=True, cascade='all, delete-orphan')
     reflections = db.relationship('Reflection', backref='user', lazy=True, cascade='all, delete-orphan')
+    
+    # Encryption
+    encryption_key = db.Column(db.String(128), nullable=False, default=lambda: Fernet.generate_key().decode())
     
     def __repr__(self):
         return f'<User {self.email}>'
@@ -87,7 +91,7 @@ class User(db.Model):
             return f"{self.first_name} {self.last_name}"
         return self.first_name or self.last_name or self.email.split('@')[0]
     
-    def to_dict(self, include_sensitive=False):
+    def             to_dict(self, include_sensitive=False):
         """Convert user object to dictionary."""
         data = {
             'id': self.id,

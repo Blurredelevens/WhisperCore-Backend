@@ -1,9 +1,11 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, send_file
 from flask.views import MethodView
 from flask_jwt_extended import (
     create_access_token, create_refresh_token, jwt_required, 
     get_jwt_identity, get_jwt, decode_token
 )
+import os
+from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, and_
 from extensions import db
@@ -392,55 +394,86 @@ class DashboardAPI(MethodView):
         """Get user dashboard with stats and recent activity."""
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
+        key = user.encryption_key.encode()  # Get the encryption key
+
+        # Get recent memories with the key
+        recent_memories = Memory.query.filter_by(user_id=user_id)\
+            .order_by(Memory.created_at.desc())\
+            .limit(5)\
+            .all()
+        
+        
+        # Get mood statistics
+        mood_stats = db.session.query(
+            Memory.mood, 
+            db.func.count(Memory.id)
+        ).filter_by(user_id=user_id)\
+         .group_by(Memory.mood)\
+         .all()
+
+        # Get tag statistics
+        tag_stats = db.session.query(
+            Memory.tags, 
+            db.func.count(Memory.id)
+        ).filter_by(user_id=user_id)\
+         .group_by(Memory.tags)\
+         .all()
+
+        # Convert memories to dict with the key
+        memories_data = [memory.to_dict(key) for memory in recent_memories]
+
+        return jsonify({
+            'recent_memories': memories_data,
+            'mood_statistics': dict(mood_stats),
+            'tag_statistics': dict(tag_stats)
+        }), 200
+    
+class UserImageUploadAPI(MethodView):
+    decorators = [jwt_required()]
+    
+    def post(self):
+        """Upload user profile image."""
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
         
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
-        # Get statistics
-        total_memories = Memory.query.filter_by(user_id=user_id).count()
-        total_reflections = Reflection.query.filter_by(user_id=user_id).count()
-        weekly_reflections = Reflection.query.filter_by(
-            user_id=user_id, reflection_type='weekly'
-        ).count()
-        monthly_reflections = Reflection.query.filter_by(
-            user_id=user_id, reflection_type='monthly'
-        ).count()
+        if 'image' not in request.files:
+            return jsonify({'error': 'No image part in request'}), 400
         
-        # Recent activity (last 7 days)
-        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
-        recent_activity_count = (
-            Memory.query.filter(and_(
-                Memory.user_id == user_id,
-                Memory.created_at >= seven_days_ago
-            )).count() +
-            Reflection.query.filter(and_(
-                Reflection.user_id == user_id,
-                Reflection.created_at >= seven_days_ago
-            )).count()
-        )
+        image = request.files['image']
+        if image.filename == '':
+            return jsonify({'error': 'No image selected'}), 400
         
-        # Recent memories (last 5)
-        recent_memories = Memory.query.filter_by(user_id=user_id)\
-            .order_by(Memory.created_at.desc()).limit(5).all()
+        filename = secure_filename(image.filename)
+        upload_folder = os.path.join(current_app.root_path, 'uploads')
+        os.makedirs(upload_folder, exist_ok=True)
+        file_path = os.path.join(upload_folder, filename)
+        image.save(file_path)
         
-        # Upcoming reflections placeholder
-        upcoming_reflections = []
+        user.image_path = file_path
+        db.session.commit()
         
-        stats = DashboardStats(
-            total_memories=total_memories,
-            total_reflections=total_reflections,
-            weekly_reflections=weekly_reflections,
-            monthly_reflections=monthly_reflections,
-            recent_activity_count=recent_activity_count
-        )
+        return jsonify({'message': 'Image uploaded successfully', 'image_path': file_path}), 200
+
+class UserImageDownloadAPI(MethodView):
+    decorators = [jwt_required()]   
+    
+    def get(self):
+        """Download user profile image."""
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
         
-        return DashboardResponse(
-            message='Dashboard data retrieved successfully',
-            user=UserResponse.model_validate(user.to_dict()),
-            stats=stats,
-            recent_memories=[memory.to_dict() for memory in recent_memories],
-            upcoming_reflections=upcoming_reflections
-        ).model_dump(), 200
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        if not user.image_path:
+            return jsonify({'error': 'No image found for this user'}), 404
+        
+        return send_file(user.image_path, mimetype='image/jpeg')
+    
+    
 
 # Register the class-based views
 auth_bp.add_url_rule('/register', view_func=AuthRegisterAPI.as_view('register'))
@@ -454,3 +487,5 @@ auth_bp.add_url_rule('/password/change', view_func=PasswordChangeAPI.as_view('pa
 auth_bp.add_url_rule('/passphrase/set', view_func=PassphraseSetAPI.as_view('passphrase_set'))
 auth_bp.add_url_rule('/passphrase/change', view_func=PassphraseChangeAPI.as_view('passphrase_change'))
 auth_bp.add_url_rule('/dashboard', view_func=DashboardAPI.as_view('dashboard'))
+auth_bp.add_url_rule('/image/upload', view_func=UserImageUploadAPI.as_view('user_image_upload'))
+auth_bp.add_url_rule('/image/download', view_func=UserImageDownloadAPI.as_view('user_image_download'))

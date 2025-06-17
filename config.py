@@ -59,7 +59,18 @@ class Config(ABC):
     def BEAT_SCHEDULE(self) -> int:
         pass
 
+    @property
+    @abstractmethod
+    def MEMORY_MAX_LENGTH(self) -> int:
+        pass
+
+    @property
+    @abstractmethod
+    def MEMORY_ENCRYPTION_KEY(self) -> str:
+        pass
+
     def get_config(self) -> Dict[str, Any]:
+        print("Loaded MEMORY_ENCRYPTION_KEY:", self.MEMORY_ENCRYPTION_KEY)
         return {
             'FLASK_APP': self.FLASK_APP,
             'FLASK_ENV': self.FLASK_ENV,
@@ -72,6 +83,8 @@ class Config(ABC):
             'CORS_ORIGINS': self.CORS_ORIGINS,
             'DEBUG': self.DEBUG,
             'REDIS_URL': self.REDIS_URL,
+            'MEMORY_MAX_LENGTH': self.MEMORY_MAX_LENGTH,
+            'MEMORY_ENCRYPTION_KEY': self.MEMORY_ENCRYPTION_KEY,
         }
 
 class EnvConfig(Config):
@@ -145,6 +158,14 @@ class EnvConfig(Config):
             "broker_connection_retry": True,
             "include": ["tasks.scheduled"]
         }
+
+    @property
+    def MEMORY_MAX_LENGTH(self) -> int:
+        return self._env.int('MEMORY_MAX_LENGTH', 1000)
+
+    @property
+    def MEMORY_ENCRYPTION_KEY(self) -> str:
+        return self._env.str('MEMORY_ENCRYPTION_KEY', 'PRE_3J4rxzhDJyjQ_L3Q1Sx8OmAD85CGvrJRToF-rrA=')
 
 class AppConfig(Config):
     def __init__(self, current_app):
@@ -220,4 +241,12 @@ class AppConfig(Config):
     @property
     def JWT_ALGORITHM(self) -> str:
         return "HS256"
+
+    @property
+    def MEMORY_MAX_LENGTH(self) -> int:
+        return self._config.get('MEMORY_MAX_LENGTH', 1000)
+
+    @property
+    def MEMORY_ENCRYPTION_KEY(self) -> str:
+        return self._config.get('MEMORY_ENCRYPTION_KEY', 'PRE_3J4rxzhDJyjQ_L3Q1Sx8OmAD85CGvrJRToF-rrA=')
   

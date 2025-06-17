@@ -26,4 +26,5 @@ flask-openapi3==4.1.0
 flask-openapi3-redoc==2.4.0
 flask-openapi3-swagger==5.19.0
 Flask-Pydantic==0.12.0
-environs==14.1.1          
+environs==14.1.1
+cryptography==42.0.2
