@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from app import db
 
 class Reflection(db.Model):
@@ -11,8 +11,7 @@ class Reflection(db.Model):
     reflection_type = db.Column(db.String(20), nullable=False)  # 'weekly' or 'monthly'
     period_start = db.Column(db.DateTime, nullable=False)
     period_end = db.Column(db.DateTime, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     def to_dict(self):
         """Convert reflection object to dictionary."""
         return {

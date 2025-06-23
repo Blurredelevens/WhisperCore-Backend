@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from app import db
 from cryptography.fernet import Fernet
 
@@ -13,8 +13,10 @@ class Memory(db.Model):
     tags = db.Column(db.String(200))
     image_path = db.Column(db.String(255))
     is_bookmarked = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    mood_emoji = db.Column(db.String(50))
+    mood_value = db.Column(db.Integer)
     
     def to_dict(self, key):
         """Convert memory object to dictionary."""
@@ -27,7 +29,9 @@ class Memory(db.Model):
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
             'image_path': self.image_path,
-            'is_bookmarked': self.is_bookmarked
+            'is_bookmarked': self.is_bookmarked,
+            'mood_emoji': self.mood_emoji,
+            'mood_value': self.mood_value
         }
 
     def set_content(self, content, key):

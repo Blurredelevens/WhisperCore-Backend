@@ -10,7 +10,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
-    image_path = db.Column(db.String(255))
+    image_path = db.Column(db.String(255), nullable=True)
     
     # Profile fields
     first_name = db.Column(db.String(50), nullable=False)
@@ -39,6 +39,9 @@ class User(db.Model):
     
     # Encryption
     encryption_key = db.Column(db.String(128), nullable=False, default=lambda: Fernet.generate_key().decode())
+    
+    # Admin
+    is_admin = db.Column(db.Boolean, default=False)
     
     def __repr__(self):
         return f'<User {self.email}>'
@@ -91,7 +94,7 @@ class User(db.Model):
             return f"{self.first_name} {self.last_name}"
         return self.first_name or self.last_name or self.email.split('@')[0]
     
-    def             to_dict(self, include_sensitive=False):
+    def to_dict(self, include_sensitive=False):
         """Convert user object to dictionary."""
         data = {
             'id': self.id,
@@ -105,7 +108,9 @@ class User(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'last_login': self.last_login.isoformat() if self.last_login else None,
-            'has_passphrase': bool(self.passphrase_hash)
+            'has_passphrase': bool(self.passphrase_hash),
+            'image_path': self.image_path,
+            'is_admin': self.is_admin
         }
         
         if include_sensitive:

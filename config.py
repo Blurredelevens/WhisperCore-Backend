@@ -151,12 +151,11 @@ class EnvConfig(Config):
     @property
     def CELERY(self) -> Dict[str, Any]:
         return {
-            "broker_url": self.CELERY_BROKER_URL,
-            "result_backend": self.CELERY_RESULT_BACKEND,
-            "task_ignore_result": self.TASK_IGNORE_RESULT,
-            "broker_connection_retry_on_startup": True,
-            "broker_connection_retry": True,
-            "include": ["tasks.scheduled"]
+            'broker_url': self.CELERY_BROKER_URL,
+            'result_backend': self.CELERY_RESULT_BACKEND,
+            'task_ignore_result': self.TASK_IGNORE_RESULT,
+            'broker_connection_retry_on_startup': True,
+            'include': ['tasks.reflection', 'tasks.maintenance', 'tasks.query']
         }
 
     @property
@@ -230,12 +229,11 @@ class AppConfig(Config):
     @property
     def CELERY(self) -> Dict[str, Any]:
         return {
-            "broker_url": self.CELERY_BROKER_URL,
-            "result_backend": self.CELERY_RESULT_BACKEND,
-            "task_ignore_result": self.TASK_IGNORE_RESULT,
-            "broker_connection_retry_on_startup": True,
-            "broker_connection_retry": True,
-            "include": ["tasks.scheduled"]
+            'broker_url': self.CELERY_BROKER_URL,
+            'result_backend': self.CELERY_RESULT_BACKEND,
+            'task_ignore_result': self.TASK_IGNORE_RESULT,
+            'broker_connection_retry_on_startup': True,
+            'include': ['tasks.reflection', 'tasks.maintenance', 'tasks.query']
         }
 
     @property
@@ -249,4 +247,11 @@ class AppConfig(Config):
     @property
     def MEMORY_ENCRYPTION_KEY(self) -> str:
         return self._config.get('MEMORY_ENCRYPTION_KEY', 'PRE_3J4rxzhDJyjQ_L3Q1Sx8OmAD85CGvrJRToF-rrA=')
-  
+
+CELERY_BEAT_SCHEDULE = {
+    'send-daily-prompt': {
+        'task': 'tasks.prompts.send_daily_prompt',
+        'schedule': 86400.0,  # 24 hours in seconds
+    },
+}
+                    

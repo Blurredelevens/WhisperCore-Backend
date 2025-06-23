@@ -12,7 +12,6 @@ from extensions import db
 from models.user import User
 from models.token import Token
 from models.memory import Memory
-from models.reflection import Reflection
 from schemas.auth import (
     UserCreate, UserResponse, UserDetailResponse, LoginRequest, 
     PassphraseLoginRequest, CombinedLoginRequest, LoginResponse,
@@ -257,7 +256,7 @@ class AuthLogoutAPI(MethodView):
         
         return LogoutResponse(message='Successfully logged out').model_dump(), 200
 
-class AuthMeAPI(MethodView):
+class AuthProfileAPI(MethodView):
     decorators = [jwt_required()]
     def get(self):
         """Get current user information."""
@@ -481,8 +480,8 @@ auth_bp.add_url_rule('/login', view_func=AuthLoginAPI.as_view('login'))
 auth_bp.add_url_rule('/login/passphrase', view_func=AuthPassphraseLoginAPI.as_view('passphrase_login'))
 auth_bp.add_url_rule('/refresh', view_func=AuthRefreshAPI.as_view('refresh'))
 auth_bp.add_url_rule('/logout', view_func=AuthLogoutAPI.as_view('logout'))
-auth_bp.add_url_rule('/me', view_func=AuthMeAPI.as_view('me'))
-auth_bp.add_url_rule('/profile', view_func=ProfileAPI.as_view('profile'))
+auth_bp.add_url_rule('/profile', view_func=AuthProfileAPI.as_view('profile'))
+auth_bp.add_url_rule('/profile-update', view_func=ProfileAPI.as_view('profile_update'))
 auth_bp.add_url_rule('/password/change', view_func=PasswordChangeAPI.as_view('password_change'))
 auth_bp.add_url_rule('/passphrase/set', view_func=PassphraseSetAPI.as_view('passphrase_set'))
 auth_bp.add_url_rule('/passphrase/change', view_func=PassphraseChangeAPI.as_view('passphrase_change'))

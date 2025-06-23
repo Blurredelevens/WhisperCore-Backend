@@ -1,19 +1,34 @@
-from pydantic import BaseModel, constr, validator
+from pydantic import BaseModel, constr, validator, EmailStr
 from typing import Optional
+from datetime import datetime
 from .base import UserBase, BaseResponse, TimestampMixin
+import re
 
 # Registration schemas
 class UserCreate(UserBase):
+    email: EmailStr
     password: constr(min_length=8)
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    passphrase: Optional[constr(min_length=12)] = None
+    first_name: str = ""
+    last_name: str = ""
+    passphrase: str | None = ""
+
+    @validator('password')
+    def password_validation(cls, v):
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError('Password must contain at least one special character (!@#$%^&*(),.?":{}|<>)')
+        return v
 
 # Login schemas
-class LoginRequest(UserBase):
+class LoginRequest(BaseModel):
+    email: EmailStr
     password: str
 
-class PassphraseLoginRequest(UserBase):
+class PassphraseLoginRequest(BaseModel):
+    email: EmailStr
     passphrase: str
 
 class CombinedLoginRequest(UserBase):
@@ -29,14 +44,14 @@ class CombinedLoginRequest(UserBase):
 # Response schemas
 class UserResponse(UserBase, TimestampMixin):
     id: int
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
+    first_name: Optional[str] = ""
+    last_name: Optional[str] = ""
     full_name: str
-    bio: Optional[str] = None
+    bio: Optional[str] = ""
     is_active: bool
     email_verified: bool
-    last_login: Optional[str] = None
-    image_path: Optional[str] = None
+    last_login: Optional[str] = ""
+    image_path: Optional[str] = ""
     
 
 class UserDetailResponse(UserResponse):

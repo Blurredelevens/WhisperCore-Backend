@@ -81,6 +81,22 @@ migrate-up:
 migrate-down:
 	docker compose exec web flask db downgrade
 
+reset-db:
+	@echo "Stopping and removing all containers and volumes..."
+	docker compose down -v
+	@echo "Removing old migration history..."
+	rm -rf migrations
+	@echo "Starting services..."
+	docker compose up --build -d
+	@echo "Waiting for services to be ready..."
+	@sleep 10
+	@echo "Initializing new migration history..."
+	docker compose exec web flask db init
+	@echo "Generating initial migration..."
+	docker compose exec web flask db migrate -m "Initial migration"
+	@echo "Applying new migration..."
+	docker compose exec web flask db upgrade
+	@echo "Database has been reset successfully."
 # Development commands
 test:
 	docker compose exec web pytest
@@ -115,6 +131,7 @@ help:
 	@echo "  migrate         - Create new migration"
 	@echo "  migrate-up      - Apply migrations"
 	@echo "  migrate-down    - Rollback migrations"
+	@echo "  reset-db        - Reset the database"
 	@echo "  test            - Run tests"
 	@echo "  lint            - Run linter"
 	@echo "  help            - Show this help message" 

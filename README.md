@@ -72,7 +72,7 @@ docker run -p 5000:5000 whispercore-backend
 ### Authentication
 - POST `/api/auth/register` - Register a new user
 - POST `/api/auth/login` - Login and get JWT token
-- GET `/api/auth/me` - Get current user info
+- GET `/api/auth/profile` - Get current user info
 
 ### Memories
 - POST `/api/memories` - Create a new memory

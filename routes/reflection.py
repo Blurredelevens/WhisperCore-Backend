@@ -7,16 +7,9 @@ from datetime import datetime, timedelta
 
 reflection_bp = Blueprint('reflection', __name__)
 
-class ReflectionListAPI(MethodView):
-    decorators = [jwt_required()]
-    def get(self):
-        user_id = get_jwt_identity()
-        reflection_type = request.args.get('type')
-        query = Reflection.query.filter_by(user_id=user_id)
-        if reflection_type:
-            query = query.filter_by(reflection_type=reflection_type)
-        reflections = query.order_by(Reflection.created_at.desc()).all()
-        return jsonify([reflection.to_dict() for reflection in reflections]), 200
+ 
+class ReflectionCreateAPI(MethodView):
+    decorators = [jwt_required()                    ]
     def post(self):
         user_id = get_jwt_identity()
         data = request.get_json()
@@ -35,6 +28,19 @@ class ReflectionListAPI(MethodView):
         db.session.commit()
         return jsonify(reflection.to_dict()), 201
 
+
+class ReflectionListAPI(MethodView):
+    decorators = [jwt_required()]
+    def get(self):
+        user_id = get_jwt_identity()
+        reflection_type = request.args.get('type')
+        query = Reflection.query.filter_by(user_id=user_id)
+        if reflection_type:
+            query = query.filter_by(reflection_type=reflection_type)
+        reflections = query.order_by(Reflection.created_at.desc()).all()
+        return jsonify([reflection.to_dict() for reflection in reflections]), 200
+
+
 class ReflectionDetailAPI(MethodView):
     decorators = [jwt_required()]
     def get(self, reflection_id):
@@ -43,6 +49,8 @@ class ReflectionDetailAPI(MethodView):
         if not reflection:
             return jsonify({'error': 'Reflection not found'}), 404
         return jsonify(reflection.to_dict()), 200
+    
+class ReflectionDeleteAPI(MethodView):
     def delete(self, reflection_id):
         user_id = get_jwt_identity()
         reflection = Reflection.query.filter_by(id=reflection_id, user_id=user_id).first()
@@ -52,6 +60,7 @@ class ReflectionDetailAPI(MethodView):
         db.session.commit()
         return jsonify({'message': 'Reflection deleted successfully'}), 200
 
-# Register the class-based views
 reflection_bp.add_url_rule('/', view_func=ReflectionListAPI.as_view('reflection_list'))
 reflection_bp.add_url_rule('/<int:reflection_id>', view_func=ReflectionDetailAPI.as_view('reflection_detail')) 
+reflection_bp.add_url_rule('/<int:reflection_id>', view_func=ReflectionDeleteAPI.as_view('reflection_delete'))
+reflection_bp.add_url_rule('/', view_func=ReflectionCreateAPI.as_view('reflection_create'))

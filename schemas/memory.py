@@ -5,6 +5,8 @@ from .base import BaseResponse, TimestampMixin
 class MemoryBase(BaseModel):
     content: constr(min_length=1)
     mood: Optional[str] = None
+    mood_emoji: Optional[str] = None
+    mood_value: Optional[int] = None
     tags: Optional[List[str]] = []
 
 class MemoryCreate(MemoryBase):
@@ -13,6 +15,8 @@ class MemoryCreate(MemoryBase):
 class MemoryUpdate(BaseModel):
     content: Optional[constr(min_length=1)] = None
     mood: Optional[str] = None
+    mood_emoji: Optional[str] = None
+    mood_value: Optional[int] = None
     tags: Optional[List[str]] = None
 
 class MemoryResponse(MemoryBase, TimestampMixin):

@@ -12,9 +12,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      worker:
+        condition: service_started
+      beat:
+        condition: service_started
+      flower:
+        condition: service_started
 
   redis:
-    image: redis:7-alpine
+    image: redis:latest
     ports:
       - "6379:6379"
     volumes:
@@ -35,7 +41,8 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - TASK_IGNORE_RESULT=True
       - BEAT_SCHEDULE=120
-    command: celery -A manage worker --loglevel=info
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    command: celery -A extensions.celery worker --loglevel=info
     volumes:
       - .:/app
 
@@ -49,7 +56,8 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - TASK_IGNORE_RESULT=True
       - BEAT_SCHEDULE=120
-    command: celery -A manage beat --loglevel=info
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    command: celery -A extensions.celery beat --loglevel=info
     volumes:
       - .:/app
 
@@ -66,7 +74,8 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - TASK_IGNORE_RESULT=True
       - BEAT_SCHEDULE=120
-    command: celery -A manage flower --port=5555
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    command: celery -A extensions.celery flower --port=5555
     volumes:
       - .:/app
 

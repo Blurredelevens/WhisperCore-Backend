@@ -70,19 +70,20 @@ def create_app(config_class=EnvConfig):
     app.register_error_handler(BadRequestException, handle_bad_request_error)
     app.register_error_handler(MethodNotAllowedException, handle_method_not_allowed_error)
     
-    # Register blueprints
+    # Register blueprints (routes only, no views)
     from routes.auth import auth_bp
     from routes.memory import memory_bp
     from routes.reflection import reflection_bp
     from routes.health import health_bp
     from routes.test import test_bp
+    from routes.task import task_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(memory_bp, url_prefix='/api/memories')
     app.register_blueprint(reflection_bp, url_prefix='/api/reflections')
     app.register_blueprint(health_bp, url_prefix='/api')
     app.register_blueprint(test_bp, url_prefix='/api/test')
-    
+    app.register_blueprint(task_bp, url_prefix='/api/task')
     app.logger.setLevel(logging.INFO)
     @app.before_request
     def log_request_info():

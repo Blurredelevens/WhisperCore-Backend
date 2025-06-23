@@ -1,8 +1,8 @@
-"""empty message
+"""Initial migration
 
-Revision ID: bd21a02ae553
+Revision ID: b2df202e3174
 Revises: 
-Create Date: 2025-06-12 08:50:12.208680
+Create Date: 2025-06-23 16:32:06.989407
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'bd21a02ae553'
+revision = 'b2df202e3174'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -22,6 +22,7 @@ def upgrade():
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('email', sa.String(length=120), nullable=False),
     sa.Column('password_hash', sa.String(length=255), nullable=False),
+    sa.Column('image_path', sa.String(length=255), nullable=True),
     sa.Column('first_name', sa.String(length=50), nullable=False),
     sa.Column('last_name', sa.String(length=50), nullable=False),
     sa.Column('bio', sa.Text(), nullable=True),
@@ -33,6 +34,8 @@ def upgrade():
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('updated_at', sa.DateTime(), nullable=True),
     sa.Column('last_login', sa.DateTime(), nullable=True),
+    sa.Column('encryption_key', sa.String(length=128), nullable=False),
+    sa.Column('is_admin', sa.Boolean(), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('users', schema=None) as batch_op:
@@ -41,11 +44,15 @@ def upgrade():
     op.create_table('memories',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('content', sa.Text(), nullable=False),
+    sa.Column('encrypted_content', sa.LargeBinary(), nullable=False),
     sa.Column('mood', sa.String(length=50), nullable=True),
     sa.Column('tags', sa.String(length=200), nullable=True),
+    sa.Column('image_path', sa.String(length=255), nullable=True),
+    sa.Column('is_bookmarked', sa.Boolean(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('updated_at', sa.DateTime(), nullable=True),
+    sa.Column('mood_emoji', sa.String(length=50), nullable=True),
+    sa.Column('mood_value', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
