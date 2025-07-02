@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from app import db
+from extensions import db
 from cryptography.fernet import Fernet
 
 class Memory(db.Model):
@@ -9,6 +9,7 @@ class Memory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     encrypted_content = db.Column(db.LargeBinary, nullable=False, default=lambda: Fernet.generate_key().decode())
+    model_response = db.Column(db.LargeBinary, nullable=False, default=lambda: Fernet.generate_key().decode())
     mood = db.Column(db.String(50))
     tags = db.Column(db.String(200))
     image_path = db.Column(db.String(255))
@@ -24,6 +25,7 @@ class Memory(db.Model):
             'id': self.id,
             'user_id': self.user_id,
             'content': self.get_content(key),
+            'model_response': self.get_model_response(key),
             'mood': self.mood,
             'tags': self.tags.split(',') if self.tags else [],
             'created_at': self.created_at.isoformat(),
@@ -41,3 +43,11 @@ class Memory(db.Model):
     def get_content(self, key):
         cipher = Fernet(key)
         return cipher.decrypt(self.encrypted_content).decode() 
+    
+    def set_model_response(self, model_response, key):
+        cipher = Fernet(key)
+        self.model_response = cipher.encrypt(model_response.encode())
+
+    def get_model_response(self, key):
+        cipher = Fernet(key)
+        return cipher.decrypt(self.model_response).decode()

@@ -85,6 +85,20 @@ class Config(ABC):
             'REDIS_URL': self.REDIS_URL,
             'MEMORY_MAX_LENGTH': self.MEMORY_MAX_LENGTH,
             'MEMORY_ENCRYPTION_KEY': self.MEMORY_ENCRYPTION_KEY,
+            'CELERY_BROKER_URL': self.CELERY_BROKER_URL,
+            'CELERY_RESULT_BACKEND': self.CELERY_RESULT_BACKEND,
+            'CELERY_TASK_IGNORE_RESULT': self.TASK_IGNORE_RESULT,
+            'CELERY_BEAT_SCHEDULE': {
+                "heartbeat": {
+                    "task": "tasks.scheduled.heartbeat",
+                    "schedule": self.BEAT_SCHEDULE,
+                },
+                "process_query_task": {
+                    "task": "tasks.scheduled.process_query_task",
+                    "schedule": self.BEAT_SCHEDULE,
+                }
+            },
+            'CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP': True,
         }
 
 class EnvConfig(Config):
@@ -155,7 +169,7 @@ class EnvConfig(Config):
             'result_backend': self.CELERY_RESULT_BACKEND,
             'task_ignore_result': self.TASK_IGNORE_RESULT,
             'broker_connection_retry_on_startup': True,
-            'include': ['tasks.reflection', 'tasks.maintenance', 'tasks.query']
+            'include': ['tasks.reflection', 'tasks.maintenance', 'tasks.llm_service', 'tasks.scheduled']
         }
 
     @property
@@ -233,7 +247,7 @@ class AppConfig(Config):
             'result_backend': self.CELERY_RESULT_BACKEND,
             'task_ignore_result': self.TASK_IGNORE_RESULT,
             'broker_connection_retry_on_startup': True,
-            'include': ['tasks.reflection', 'tasks.maintenance', 'tasks.query']
+            'include': ['tasks.reflection', 'tasks.maintenance', 'tasks.llm_service', 'tasks.scheduled']
         }
 
     @property

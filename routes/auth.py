@@ -430,11 +430,20 @@ class DashboardAPI(MethodView):
 class UserImageUploadAPI(MethodView):
     decorators = [jwt_required()]
     
-    def post(self):
-        """Upload user profile image."""
-        user_id = get_jwt_identity()
-        user = User.query.get(user_id)
+    def post(self, user_id):
+        """Upload user profile image by user ID."""
+        # Get current user from JWT
+        current_user_id = get_jwt_identity()
         
+        # Check if current user is trying to upload for themselves or is admin
+        if str(current_user_id) != str(user_id):
+            # Check if current user is admin
+            current_user = User.query.get(current_user_id)
+            if not current_user or not current_user.is_admin:
+                return jsonify({'error': 'Unauthorized: You can only upload images for your own account'}), 403
+        
+        # Get the target user
+        user = User.query.get(user_id)
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
@@ -454,16 +463,29 @@ class UserImageUploadAPI(MethodView):
         user.image_path = file_path
         db.session.commit()
         
-        return jsonify({'message': 'Image uploaded successfully', 'image_path': file_path}), 200
+        return jsonify({
+            'message': 'Image uploaded successfully', 
+            'image_path': file_path,
+            'user_id': user_id
+        }), 200
 
 class UserImageDownloadAPI(MethodView):
     decorators = [jwt_required()]   
     
-    def get(self):
-        """Download user profile image."""
-        user_id = get_jwt_identity()
-        user = User.query.get(user_id)
+    def get(self, user_id):
+        """Download user profile image by user ID."""
+        # Get current user from JWT
+        current_user_id = get_jwt_identity()
         
+        # Check if current user is trying to download for themselves or is admin
+        if str(current_user_id) != str(user_id):
+            # Check if current user is admin
+            current_user = User.query.get(current_user_id)
+            if not current_user or not current_user.is_admin:
+                return jsonify({'error': 'Unauthorized: You can only download images for your own account'}), 403
+        
+        # Get the target user
+        user = User.query.get(user_id)
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
@@ -486,5 +508,5 @@ auth_bp.add_url_rule('/password/change', view_func=PasswordChangeAPI.as_view('pa
 auth_bp.add_url_rule('/passphrase/set', view_func=PassphraseSetAPI.as_view('passphrase_set'))
 auth_bp.add_url_rule('/passphrase/change', view_func=PassphraseChangeAPI.as_view('passphrase_change'))
 auth_bp.add_url_rule('/dashboard', view_func=DashboardAPI.as_view('dashboard'))
-auth_bp.add_url_rule('/image/upload', view_func=UserImageUploadAPI.as_view('user_image_upload'))
-auth_bp.add_url_rule('/image/download', view_func=UserImageDownloadAPI.as_view('user_image_download'))
+auth_bp.add_url_rule('/<int:user_id>/image/upload/', view_func=UserImageUploadAPI.as_view('user_image_upload'))
+auth_bp.add_url_rule('/<int:user_id>/image/download/', view_func=UserImageDownloadAPI.as_view('user_image_download'))

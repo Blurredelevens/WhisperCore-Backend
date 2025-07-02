@@ -1,8 +1,8 @@
-"""Initial migration
+"""empty message
 
-Revision ID: b2df202e3174
+Revision ID: b5d2347bfe66
 Revises: 
-Create Date: 2025-06-23 16:32:06.989407
+Create Date: 2025-07-02 07:56:05.415124
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'b2df202e3174'
+revision = 'b5d2347bfe66'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -35,6 +35,7 @@ def upgrade():
     sa.Column('updated_at', sa.DateTime(), nullable=True),
     sa.Column('last_login', sa.DateTime(), nullable=True),
     sa.Column('encryption_key', sa.String(length=128), nullable=False),
+    sa.Column('model_key', sa.String(length=128), nullable=False),
     sa.Column('is_admin', sa.Boolean(), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
@@ -45,6 +46,7 @@ def upgrade():
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('encrypted_content', sa.LargeBinary(), nullable=False),
+    sa.Column('model_response', sa.LargeBinary(), nullable=False),
     sa.Column('mood', sa.String(length=50), nullable=True),
     sa.Column('tags', sa.String(length=200), nullable=True),
     sa.Column('image_path', sa.String(length=255), nullable=True),

@@ -39,7 +39,7 @@ class User(db.Model):
     
     # Encryption
     encryption_key = db.Column(db.String(128), nullable=False, default=lambda: Fernet.generate_key().decode())
-    
+    model_key = db.Column(db.String(128), nullable=False, default=lambda: Fernet.generate_key().decode())
     # Admin
     is_admin = db.Column(db.Boolean, default=False)
     

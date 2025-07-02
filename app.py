@@ -1,9 +1,8 @@
 from flask_openapi3 import Info, OpenAPI
 from flask_cors import CORS
 from sqlalchemy.exc import IntegrityError
-from config import EnvConfig, AppConfig
-from extensions import db, jwt, limiter, redis_client, migrate
-from tasks.celery_app import celery_init_app
+from config import EnvConfig
+from extensions import init_extensions
 from models import *
 from flask_jwt_extended import JWTManager
 import logging
@@ -20,11 +19,7 @@ def create_app(config_class=EnvConfig):
     jwt = JWTManager(app)
     
     # Initialize extensions
-    db.init_app(app)
-    migrate.init_app(app, db)
-    jwt.init_app(app)
-    limiter.init_app(app)
-    redis_client.init_app(app)
+    init_extensions(app)
     
     # JWT Configuration - Add token validation check
     @jwt.token_in_blocklist_loader
@@ -50,9 +45,6 @@ def create_app(config_class=EnvConfig):
     def missing_token_callback(error):
         return {'error': 'Authorization token is required'}, 401
     
-    # Initialize Celery
-    celery_init_app(app)
-    
     # Enable CORS
     CORS(app, resources={r"/api/*": {"origins": app.config['CORS_ORIGINS']}})
     
@@ -74,15 +66,11 @@ def create_app(config_class=EnvConfig):
     from routes.auth import auth_bp
     from routes.memory import memory_bp
     from routes.reflection import reflection_bp
-    from routes.health import health_bp
-    from routes.test import test_bp
     from routes.task import task_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(memory_bp, url_prefix='/api/memories')
     app.register_blueprint(reflection_bp, url_prefix='/api/reflections')
-    app.register_blueprint(health_bp, url_prefix='/api')
-    app.register_blueprint(test_bp, url_prefix='/api/test')
     app.register_blueprint(task_bp, url_prefix='/api/task')
     app.logger.setLevel(logging.INFO)
     @app.before_request

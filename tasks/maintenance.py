@@ -1,6 +1,6 @@
 from celery import shared_task
 from datetime import datetime, timedelta
-from app import db
+from extensions import db
 
 @shared_task
 def cleanup_old_sessions():

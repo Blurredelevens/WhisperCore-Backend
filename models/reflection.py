@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from app import db
+from extensions import db
 
 class Reflection(db.Model):
     """Reflection model for AI-generated weekly and monthly reflections."""

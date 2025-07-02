@@ -6,6 +6,12 @@
 up:
 	docker compose up -d
 
+debug-run:
+	docker compose -f docker-compose.yaml -f docker-compose.debug.yaml up
+
+debug-down:
+	docker compose -f docker-compose.yaml -f docker-compose.debug.yaml down
+	
 down:
 	docker compose down
 

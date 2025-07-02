@@ -1,5 +1,6 @@
 FROM python:3.11.11
 
+# Set work directory
 WORKDIR /app
 
 # Install system dependencies
@@ -8,9 +9,12 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first to leverage Docker cache
+# Copy requirements first for better caching
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+
+# Install Python dependencies with cache clearing
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
 
 # Copy the rest of the application
 COPY . .
@@ -19,12 +23,14 @@ COPY . .
 RUN mkdir -p /app/instance
 
 # Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYDEVD_DISABLE_FILE_VALIDATION=1
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
-ENV PYTHONUNBUFFERED=1
 
 # Expose the port
 EXPOSE 5000
 
 # Run the application with Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:create_app()"] 
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--timeout", "300", "--workers", "1", "--worker-class", "sync", "app:create_app()"] 

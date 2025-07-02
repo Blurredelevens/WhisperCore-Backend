@@ -10,23 +10,36 @@ from celery import Celery
 db = SQLAlchemy()
 migrate = Migrate()
 jwt = JWTManager()
-limiter = Limiter(key_func=get_remote_address)
 redis_client = FlaskRedis()
 
 # Initialize Celery
 celery = Celery(
     'whisper_core',
-    broker='redis://redis:6379/0',
-    backend='redis://redis:6379/0',
-    include=['tasks.reflection', 'tasks.maintenance', 'tasks.query']
+    include=[
+        'tasks.reflection',
+        'tasks.maintenance',
+        'tasks.llm_service',
+        'tasks.scheduled'
+    ]
 )
+ 
+
+import tasks.reflection
+import tasks.maintenance
+import tasks.llm_service
+import tasks.scheduled
 
 def init_extensions(app):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    limiter.init_app(app)
     redis_client.init_app(app)
     
-    # Configure Celery
+    limiter = Limiter(
+        key_func=get_remote_address,
+        storage_uri="redis://redis:6379/1",
+        default_limits=["200 per day", "50 per hour"]
+    )
+    limiter.init_app(app)
+    
     celery.conf.update(app.config)

@@ -53,17 +53,21 @@ class MemoryListAPI(MethodView):
             user_id = get_jwt_identity()
             user = User.query.get(user_id)
             key = user.encryption_key.encode()
+            model_key = user.model_key.encode()
             data = request.get_json()
             print("Encrypting with key:", key)
             print("Content to encrypt:", data['content'])
+            print("Model response to encrypt:", data['model_response'])
             memory = Memory(
                 user_id=user_id,
                 mood=data.get('mood'),
                 tags=','.join(data.get('tags', []))
             )
             memory.set_content(data['content'], key)
+            memory.set_model_response(data['model_response'], model_key)
             db.session.add(memory)
             db.session.commit()
+
             return jsonify(memory.to_dict(key)), 201
         except Exception as e:
             print("Error in POST /api/memories:", e)
@@ -162,6 +166,17 @@ class MemoryTagListAPI(MethodView):
         return jsonify(list(tags))
     
 
+class MemoryMoodListAPI(MethodView):
+    decorators = [jwt_required()]
+    def get(self):
+        user_id = get_jwt_identity()
+        memories = Memory.query.filter_by(user_id=user_id).all()
+        moods = set()
+        for memory in memories:
+            if memory.mood:
+                moods.add(memory.mood)
+        return jsonify(list(moods))
+
 class MemoryBookmarkAPI(MethodView):
     decorators = [jwt_required()]
 
@@ -185,3 +200,4 @@ memory_bp.add_url_rule('/<int:memory_id>/image', view_func=MemoryImageUploadAPI.
 memory_bp.add_url_rule('/<int:memory_id>/image/download', view_func=MemoryImageDownloadAPI.as_view('memory_image_download'))
 memory_bp.add_url_rule('/tags', view_func=MemoryTagListAPI.as_view('memory_tag_list'))
 memory_bp.add_url_rule('/<int:memory_id>/bookmark', view_func=MemoryBookmarkAPI.as_view('memory_bookmark'))
+memory_bp.add_url_rule('/moods', view_func=MemoryMoodListAPI.as_view('memory_mood_list'))
