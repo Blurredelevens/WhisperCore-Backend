@@ -1,10 +1,11 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from celery.result import AsyncResult
-from extensions import celery
+from extensions import celery, db
 from flask.views import MethodView
 import logging
-
+from models import User, Memory
+import json
 task_bp = Blueprint('task', __name__)   
 
 logger = logging.getLogger(__name__)
@@ -15,21 +16,29 @@ class TaskAPI(MethodView):
     def post(self):
         print("Request received")
         user_id = get_jwt_identity()
-        query = request.json.get('query')
-        if not query:
-            return jsonify({"error": "No query provided"}), 400
-        
+        user = User.query.get(user_id)
+        key = user.encryption_key.encode()
+        data = request.get_json()
+
+        if not data or 'content' not in data:
+                    return jsonify({"error": "Missing 'content' in request body"}), 400
+
+        memory = Memory(
+            user_id=user_id
+        )
+        memory.set_content(data['content'], key)
+        db.session.add(memory)
+        db.session.commit()
+
         try:
-            task = celery.send_task('tasks.scheduled.process_query_task', args=[{"query": query}])
-            
+            task = celery.send_task('tasks.scheduled.process_query_task', args=[data['content']])
             return jsonify({
                 "message": "Task started successfully",
-                "task_id": task.id,
-                "status": "processing" 
+                "status": "processing",
+                "task_id": task.id
             }), 202
-                
         except Exception as e:
-                return jsonify({"error": f"Error starting task: {str(e)}"}), 500
+            return jsonify({"error": f"Error starting task: {str(e)}"}), 500
 
 
 class TaskStatusAPI(MethodView):
@@ -47,6 +56,33 @@ class TaskStatusAPI(MethodView):
             }
         elif task_result.state == 'SUCCESS':
             result_data = task_result.result
+            
+            try:
+                memories = Memory.query.filter_by(user_id=user_id).order_by(Memory.created_at.desc()).limit(1).all()
+                if memories:
+                    memory = memories[0]
+                    if not memory.model_response or memory.model_response == b'':
+                        user = User.query.get(user_id)
+                        key = user.encryption_key.encode()
+                        
+                        if isinstance(result_data, dict) and 'data' in result_data:
+                            if isinstance(result_data['data'], dict) and 'text' in result_data['data']:
+                                response_text = result_data['data']['text']
+                            elif isinstance(result_data['data'], str):
+                                response_text = result_data['data']
+                            else:
+                                response_text = json.dumps(result_data['data'])
+                        elif isinstance(result_data, dict):
+                            response_text = json.dumps(result_data)
+                        else:
+                            response_text = str(result_data)
+                        
+                        memory.set_model_response(response_text, key)
+                        db.session.commit()
+                        print(f"Saved response to memory {memory.id} via TaskStatusAPI")
+            except Exception as e:
+                print(f"Error saving response in TaskStatusAPI: {e}")
+            
             response = {
                 'task_id': task_id,
                 'state': task_result.state,

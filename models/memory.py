@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from extensions import db
 from cryptography.fernet import Fernet
+import logging
 
 class Memory(db.Model):
     """Memory model for storing user memories and journal entries."""
@@ -8,8 +9,8 @@ class Memory(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    encrypted_content = db.Column(db.LargeBinary, nullable=False, default=lambda: Fernet.generate_key().decode())
-    model_response = db.Column(db.LargeBinary, nullable=False, default=lambda: Fernet.generate_key().decode())
+    encrypted_content = db.Column(db.LargeBinary, nullable=False, default=b'')
+    model_response = db.Column(db.LargeBinary, nullable=False, default=b'')
     mood = db.Column(db.String(50))
     tags = db.Column(db.String(200))
     image_path = db.Column(db.String(255))
@@ -42,7 +43,11 @@ class Memory(db.Model):
 
     def get_content(self, key):
         cipher = Fernet(key)
-        return cipher.decrypt(self.encrypted_content).decode() 
+        try:
+            return cipher.decrypt(self.encrypted_content).decode()
+        except Exception as e:
+            logging.getLogger(__name__).error(f"Decryption failed for content: {e}")
+            return None
     
     def set_model_response(self, model_response, key):
         cipher = Fernet(key)
@@ -50,4 +55,8 @@ class Memory(db.Model):
 
     def get_model_response(self, key):
         cipher = Fernet(key)
-        return cipher.decrypt(self.model_response).decode()
+        try:
+            return cipher.decrypt(self.model_response).decode()
+        except Exception as e:
+            logging.getLogger(__name__).error(f"Decryption failed for model_response: {e}")
+            return None
