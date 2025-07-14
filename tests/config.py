@@ -17,12 +17,12 @@ class EnvTestConfig(EnvConfig):
     @property
     def TEMPLATE_API_KEY(self):
         return self._env.str("TEMPLATE_API_KEY", "1234")
-    
+
     @property
     def DATABASE_URL(self) -> str:
         """Override to use SQLite file for testing."""
         return "sqlite:///test.db"
-    
+
     @property
     def REDIS_URL(self) -> str:
         """Override to use a mock Redis URL for testing."""

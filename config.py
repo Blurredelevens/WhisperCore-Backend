@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any
-from environs import Env
 from datetime import timedelta
+from typing import Any, Dict
+
+from environs import Env
+
 
 class Config(ABC):
     @property
@@ -61,6 +63,21 @@ class Config(ABC):
 
     @property
     @abstractmethod
+    def WEEKLY_SUMMARY_SCHEDULE(self) -> Dict[str, Any]:
+        pass
+
+    @property
+    @abstractmethod
+    def MONTHLY_SUMMARY_SCHEDULE(self) -> Dict[str, Any]:
+        pass
+
+    @property
+    @abstractmethod
+    def DAILY_PROMPT_SCHEDULE(self) -> Dict[str, Any]:
+        pass
+
+    @property
+    @abstractmethod
     def MEMORY_MAX_LENGTH(self) -> int:
         pass
 
@@ -69,49 +86,52 @@ class Config(ABC):
     def MEMORY_ENCRYPTION_KEY(self) -> str:
         pass
 
+    @property
+    @abstractmethod
+    def LLM_API_URL(self) -> str:
+        pass
+
     def get_config(self) -> Dict[str, Any]:
         print("Loaded MEMORY_ENCRYPTION_KEY:", self.MEMORY_ENCRYPTION_KEY)
         return {
-            'FLASK_APP': self.FLASK_APP,
-            'FLASK_ENV': self.FLASK_ENV,
-            'SECRET_KEY': self.SECRET_KEY,
-            'JWT_SECRET_KEY': self.JWT_SECRET_KEY,
-            'JWT_ACCESS_TOKEN_EXPIRES': self.JWT_ACCESS_TOKEN_EXPIRES,
-            'JWT_REFRESH_TOKEN_EXPIRES': self.JWT_REFRESH_TOKEN_EXPIRES,
-            'SQLALCHEMY_DATABASE_URI': self.DATABASE_URL,
-            'SQLALCHEMY_TRACK_MODIFICATIONS': False,
-            'CORS_ORIGINS': self.CORS_ORIGINS,
-            'DEBUG': self.DEBUG,
-            'REDIS_URL': self.REDIS_URL,
-            'MEMORY_MAX_LENGTH': self.MEMORY_MAX_LENGTH,
-            'MEMORY_ENCRYPTION_KEY': self.MEMORY_ENCRYPTION_KEY,
-            'CELERY_BROKER_URL': self.CELERY_BROKER_URL,
-            'CELERY_RESULT_BACKEND': self.CELERY_RESULT_BACKEND,
-            'CELERY_TASK_IGNORE_RESULT': self.TASK_IGNORE_RESULT,
-            'CELERY_BEAT_SCHEDULE': {
+            "FLASK_APP": self.FLASK_APP,
+            "FLASK_ENV": self.FLASK_ENV,
+            "SECRET_KEY": self.SECRET_KEY,
+            "JWT_SECRET_KEY": self.JWT_SECRET_KEY,
+            "JWT_ACCESS_TOKEN_EXPIRES": self.JWT_ACCESS_TOKEN_EXPIRES,
+            "JWT_REFRESH_TOKEN_EXPIRES": self.JWT_REFRESH_TOKEN_EXPIRES,
+            "SQLALCHEMY_DATABASE_URI": self.DATABASE_URL,
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "CORS_ORIGINS": self.CORS_ORIGINS,
+            "DEBUG": self.DEBUG,
+            "REDIS_URL": self.REDIS_URL,
+            "MEMORY_MAX_LENGTH": self.MEMORY_MAX_LENGTH,
+            "MEMORY_ENCRYPTION_KEY": self.MEMORY_ENCRYPTION_KEY,
+            # Celery configuration using new format
+            "broker_url": self.CELERY_BROKER_URL,
+            "result_backend": self.CELERY_RESULT_BACKEND,
+            "task_ignore_result": self.TASK_IGNORE_RESULT,
+            "broker_connection_retry_on_startup": True,
+            "beat_schedule": {
                 "heartbeat": {
                     "task": "tasks.scheduled.heartbeat",
-                    "schedule": self.BEAT_SCHEDULE,
-                },
-                "process_query_task": { # TODO: remove this
-                    "task": "tasks.scheduled.process_query_task",
-                    "schedule": self.BEAT_SCHEDULE,
+                    "schedule": 120.0,  # 2 minutes
                 },
                 "generate_weekly_summary": {
                     "task": "tasks.scheduled.generate_weekly_summary",
-                    "schedule": 604800.0,  # 7 days in seconds (weekly)
+                    "schedule": 120.0,  # 2 minutes for testing (weekly)
                 },
                 "generate_monthly_summary": {
-                    "task": "tasks.scheduled.generate_monthly_summary", 
-                    "schedule": 2592000.0,  # 30 days in seconds (monthly)
+                    "task": "tasks.scheduled.generate_monthly_summary",
+                    "schedule": 180.0,  # 3 minutes for testing (monthly)
                 },
                 "send_daily_prompt": {
                     "task": "tasks.scheduled.send_daily_prompt",
-                    "schedule": 86400.0,  # 24 hours in seconds (daily)
-                }
+                    "schedule": 240.0,  # 4 minutes for testing (daily)
+                },
             },
-            'CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP': True,
         }
+
 
 class EnvConfig(Config):
     def __init__(self):
@@ -120,19 +140,19 @@ class EnvConfig(Config):
 
     @property
     def FLASK_APP(self) -> str:
-        return self._env.str('FLASK_APP', 'app.py')
+        return self._env.str("FLASK_APP", "app.py")
 
     @property
     def FLASK_ENV(self) -> str:
-        return self._env.str('FLASK_ENV', 'development')
+        return self._env.str("FLASK_ENV", "development")
 
     @property
     def SECRET_KEY(self) -> str:
-        return self._env.str('SECRET_KEY')
+        return self._env.str("SECRET_KEY")
 
     @property
     def JWT_SECRET_KEY(self) -> str:
-        return self._env.str('JWT_SECRET_KEY')
+        return self._env.str("JWT_SECRET_KEY")
 
     @property
     def JWT_ACCESS_TOKEN_EXPIRES(self) -> timedelta:
@@ -144,53 +164,60 @@ class EnvConfig(Config):
 
     @property
     def DATABASE_URL(self) -> str:
-        return self._env.str('DATABASE_URL')
+        return self._env.str("DATABASE_URL")
 
     @property
     def REDIS_URL(self) -> str:
-        return self._env.str('REDIS_URL')
+        return self._env.str("REDIS_URL")
 
     @property
     def CORS_ORIGINS(self) -> list:
-        return self._env.list('CORS_ORIGINS')
+        return self._env.list("CORS_ORIGINS")
 
     @property
     def DEBUG(self) -> bool:
-        return self._env.bool('DEBUG', False)
+        return self._env.bool("DEBUG", False)
 
     @property
     def BEAT_SCHEDULE(self) -> int:
-        return self._env.int('BEAT_SCHEDULE', 0)
+        return self._env.int("BEAT_SCHEDULE", 0)
+
+    @property
+    def WEEKLY_SUMMARY_SCHEDULE(self) -> Dict[str, Any]:
+        return {"task": "tasks.scheduled.generate_weekly_summary", "schedule": 120.0}  # 2 minutes for testing
+
+    @property
+    def MONTHLY_SUMMARY_SCHEDULE(self) -> Dict[str, Any]:
+        return {"task": "tasks.scheduled.generate_monthly_summary", "schedule": 180.0}  # 3 minutes for testing
+
+    @property
+    def DAILY_PROMPT_SCHEDULE(self) -> Dict[str, Any]:
+        return {"task": "tasks.scheduled.send_daily_prompt", "schedule": 240.0}  # 4 minutes for testing
 
     @property
     def CELERY_BROKER_URL(self) -> str:
-        return self._env.str('CELERY_BROKER_URL', 'redis://redis:6379/0')
+        return self._env.str("CELERY_BROKER_URL", "redis://redis:6379/0")
 
     @property
     def CELERY_RESULT_BACKEND(self) -> str:
-        return self._env.str('CELERY_RESULT_BACKEND', 'redis://redis:6379/0')
+        return self._env.str("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
 
     @property
     def TASK_IGNORE_RESULT(self) -> bool:
-        return self._env.bool('TASK_IGNORE_RESULT', True)
-
-    @property
-    def CELERY(self) -> Dict[str, Any]:
-        return {
-            'broker_url': self.CELERY_BROKER_URL,
-            'result_backend': self.CELERY_RESULT_BACKEND,
-            'task_ignore_result': self.TASK_IGNORE_RESULT,
-            'broker_connection_retry_on_startup': True,
-            'include': ['tasks.llm_service', 'tasks.scheduled']
-        }
+        return self._env.bool("TASK_IGNORE_RESULT", True)
 
     @property
     def MEMORY_MAX_LENGTH(self) -> int:
-        return self._env.int('MEMORY_MAX_LENGTH', 1000)
+        return self._env.int("MEMORY_MAX_LENGTH", 1000)
 
     @property
     def MEMORY_ENCRYPTION_KEY(self) -> str:
-        return self._env.str('MEMORY_ENCRYPTION_KEY', 'PRE_3J4rxzhDJyjQ_L3Q1Sx8OmAD85CGvrJRToF-rrA=')
+        return self._env.str("MEMORY_ENCRYPTION_KEY", "PRE_3J4rxzhDJyjQ_L3Q1Sx8OmAD85CGvrJRToF-rrA=")
+
+    @property
+    def LLM_API_URL(self) -> str:
+        return self._env.str("LLM_API_URL", "http://localhost:8000")
+
 
 class AppConfig(Config):
     def __init__(self, current_app):
@@ -198,19 +225,19 @@ class AppConfig(Config):
 
     @property
     def FLASK_APP(self) -> str:
-        return self._config.get('FLASK_APP', 'app.py')
+        return self._config.get("FLASK_APP", "app.py")
 
     @property
     def FLASK_ENV(self) -> str:
-        return self._config.get('FLASK_ENV', 'development')
+        return self._config.get("FLASK_ENV", "development")
 
     @property
     def SECRET_KEY(self) -> str:
-        return self._config.get('SECRET_KEY')
+        return self._config.get("SECRET_KEY")
 
     @property
     def JWT_SECRET_KEY(self) -> str:
-        return self._config.get('JWT_SECRET_KEY')
+        return self._config.get("JWT_SECRET_KEY")
 
     @property
     def JWT_ACCESS_TOKEN_EXPIRES(self) -> timedelta:
@@ -222,62 +249,56 @@ class AppConfig(Config):
 
     @property
     def DATABASE_URL(self) -> str:
-        return self._config.get('DATABASE_URL')
+        return self._config.get("DATABASE_URL")
 
     @property
     def REDIS_URL(self) -> str:
-        return self._config.get('REDIS_URL')
+        return self._config.get("REDIS_URL")
 
     @property
     def CORS_ORIGINS(self) -> list:
-        return self._config.get('CORS_ORIGINS', [])
+        return self._config.get("CORS_ORIGINS", [])
 
     @property
     def DEBUG(self) -> bool:
-        return self._config.get('DEBUG', False)
+        return self._config.get("DEBUG", False)
 
     @property
     def BEAT_SCHEDULE(self) -> int:
-        return self._config.get('BEAT_SCHEDULE', 0)
+        return self._config.get("BEAT_SCHEDULE", 0)
+
+    @property
+    def WEEKLY_SUMMARY_SCHEDULE(self) -> Dict[str, Any]:
+        return {"task": "tasks.scheduled.generate_weekly_summary", "schedule": 120.0}  # 2 minutes for testing
+
+    @property
+    def MONTHLY_SUMMARY_SCHEDULE(self) -> Dict[str, Any]:
+        return {"task": "tasks.scheduled.generate_monthly_summary", "schedule": 180.0}  # 3 minutes for testing
+
+    @property
+    def DAILY_PROMPT_SCHEDULE(self) -> Dict[str, Any]:
+        return {"task": "tasks.scheduled.send_daily_prompt", "schedule": 240.0}  # 4 minutes for testing
 
     @property
     def CELERY_BROKER_URL(self) -> str:
-        return self._config.get('REDIS_URL', 'redis://redis:6379/0')
+        return self._config.get("REDIS_URL", "redis://redis:6379/0")
 
     @property
     def CELERY_RESULT_BACKEND(self) -> str:
-        return self._config.get('REDIS_URL', 'redis://redis:6379/0')
+        return self._config.get("REDIS_URL", "redis://redis:6379/0")
 
     @property
     def TASK_IGNORE_RESULT(self) -> bool:
-        return self._config.get('TASK_IGNORE_RESULT', True)
-
-    @property
-    def CELERY(self) -> Dict[str, Any]:
-        return {
-            'broker_url': self.CELERY_BROKER_URL,
-            'result_backend': self.CELERY_RESULT_BACKEND,
-            'task_ignore_result': self.TASK_IGNORE_RESULT,
-            'broker_connection_retry_on_startup': True,
-            'include': ['tasks.llm_service', 'tasks.scheduled']
-        }
-
-    @property
-    def JWT_ALGORITHM(self) -> str:
-        return "HS256"
+        return self._config.get("TASK_IGNORE_RESULT", True)
 
     @property
     def MEMORY_MAX_LENGTH(self) -> int:
-        return self._config.get('MEMORY_MAX_LENGTH', 1000)
+        return self._config.get("MEMORY_MAX_LENGTH", 1000)
 
     @property
     def MEMORY_ENCRYPTION_KEY(self) -> str:
-        return self._config.get('MEMORY_ENCRYPTION_KEY', 'PRE_3J4rxzhDJyjQ_L3Q1Sx8OmAD85CGvrJRToF-rrA=')
+        return self._config.get("MEMORY_ENCRYPTION_KEY", "PRE_3J4rxzhDJyjQ_L3Q1Sx8OmAD85CGvrJRToF-rrA=")
 
-CELERY_BEAT_SCHEDULE = {
-    'send-daily-prompt': {
-        'task': 'tasks.prompts.send_daily_prompt',
-        'schedule': 86400.0,  # 24 hours in seconds
-    },
-}
-                    
+    @property
+    def LLM_API_URL(self) -> str:
+        return self._config.get("LLM_API_URL", "http://localhost:8000")

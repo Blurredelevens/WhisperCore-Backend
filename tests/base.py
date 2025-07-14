@@ -1,10 +1,8 @@
 import copy
 import json
 from functools import wraps
-from datetime import datetime, timezone
 
 import pytest
-from flask import Flask
 from flask_jwt_extended import create_access_token
 
 
@@ -43,7 +41,7 @@ def skip_if_no_query_schema_cls():
 
 class FlaskViewTestBase:
     """Base class for Flask API view tests with JWT authentication and encryption support."""
-    
+
     @property
     def model(self):
         """The database model class to test."""
@@ -118,7 +116,7 @@ class FlaskViewTestBase:
         """Create authentication headers for the given user."""
         if not self.requires_auth:
             return {}
-        
+
         token = create_access_token(identity=user.id)
         return {"Authorization": f"Bearer {token}"}
 
@@ -224,7 +222,7 @@ class FlaskViewTestBase:
         """Test GET request for detail endpoint."""
         if not self.factory_test_cls:
             pytest.skip("No factory class defined")
-            
+
         db_record = self.factory_test_cls()
         self.update_batch([db_record])
         db_record.save()
@@ -252,7 +250,7 @@ class FlaskViewTestBase:
         """Test DELETE request for detail endpoint."""
         if not self.factory_test_cls:
             pytest.skip("No factory class defined")
-            
+
         record_count = 2
         db_record = self.factory_test_cls()
         self.update_batch([db_record])
@@ -275,11 +273,7 @@ class FlaskViewTestBase:
         payload = self.request_factory_test_cls() if self.request_factory_test_cls else {}
 
         headers = self.create_auth_headers(user) if self.requires_auth else {}
-        response = client.post(
-            self.base_url, 
-            json=payload,
-            headers=headers
-        )
+        response = client.post(self.base_url, json=payload, headers=headers)
 
         if "post" not in self.allowed_methods["list"]:
             assert response.status_code == 405
@@ -293,18 +287,14 @@ class FlaskViewTestBase:
         """Test PUT request for detail endpoint."""
         if not self.factory_test_cls:
             pytest.skip("No factory class defined")
-            
+
         db_record = self.factory_test_cls()
         self.update_batch([db_record])
         db_record.save()
         payload = self.request_factory_test_cls() if self.request_factory_test_cls else {}
 
         headers = self.create_auth_headers(user) if self.requires_auth else {}
-        response = client.put(
-            f"{self.base_url}/{db_record.id}",
-            json=payload,
-            headers=headers
-        )
+        response = client.put(f"{self.base_url}/{db_record.id}", json=payload, headers=headers)
 
         if "put" not in self.allowed_methods["detail"]:
             assert response.status_code == 405
@@ -322,7 +312,7 @@ class FlaskViewTestBase:
 
         if not self.factory_test_cls:
             pytest.skip("No factory class defined")
-            
+
         db_record = self.factory_test_cls()
         self.update_batch([db_record])
         db_record.save()
@@ -336,11 +326,7 @@ class FlaskViewTestBase:
             payload = self.request_factory_test_cls(**relation_params, create_relations__should_create=False)
 
         headers = self.create_auth_headers(user) if self.requires_auth else {}
-        response = client.put(
-            f"{self.base_url}/{db_record.id}",
-            json=payload,
-            headers=headers
-        )
+        response = client.put(f"{self.base_url}/{db_record.id}", json=payload, headers=headers)
 
         assert response.status_code == 400
 
@@ -348,6 +334,6 @@ class FlaskViewTestBase:
         """Test access without authentication when auth is required."""
         if not self.requires_auth:
             pytest.skip("Endpoint does not require authentication")
-            
+
         response = client.get(self.base_url)
         assert response.status_code == 401

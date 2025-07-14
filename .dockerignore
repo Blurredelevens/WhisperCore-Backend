@@ -78,4 +78,4 @@ Dockerfile.optimized
 requirements-dev.txt
 
 # Celery
-celerybeat-schedule* 
+celerybeat-schedule*

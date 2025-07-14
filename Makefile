@@ -11,7 +11,7 @@ debug-run:
 
 debug-down:
 	docker compose -f docker-compose.yaml -f docker-compose.debug.yaml down
-	
+
 down:
 	docker compose down
 
@@ -148,4 +148,4 @@ help:
 	@echo "  reset-db        - Reset the database"
 	@echo "  test            - Run tests"
 	@echo "  lint            - Run linter"
-	@echo "  help            - Show this help message" 
+	@echo "  help            - Show this help message"

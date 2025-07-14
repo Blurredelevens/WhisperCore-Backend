@@ -2,7 +2,7 @@ services:
   web:
     build:
       context: .
-      dockerfile: Dockerfile.fast
+      dockerfile: Dockerfile
     ports:
       - "5000:5000"
     env_file:
@@ -36,13 +36,12 @@ services:
   worker:
     build:
       context: .
-      dockerfile: Dockerfile.fast
+      dockerfile: Dockerfile
     depends_on:
       - redis
     env_file:
       - .env
     environment:
-      - FLASK_APP=manage:flask_app
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - TASK_IGNORE_RESULT=True
@@ -55,11 +54,10 @@ services:
   beat:
     build:
       context: .
-      dockerfile: Dockerfile.fast
+      dockerfile: Dockerfile
     depends_on:
       - redis
     environment:
-      - FLASK_APP=manage:flask_app
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - TASK_IGNORE_RESULT=True
@@ -73,14 +71,13 @@ services:
   flower:
     build:
       context: .
-      dockerfile: Dockerfile.flower
+      dockerfile: Dockerfile
     depends_on:
       - redis
       - worker
     ports:
       - "5555:5555"
     environment:
-      - FLASK_APP=manage:flask_app
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - TASK_IGNORE_RESULT=True
