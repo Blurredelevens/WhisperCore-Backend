@@ -16,15 +16,20 @@ class TaskAPI(MethodView):
     def post(self):
         print("Request received")
         user_id = get_jwt_identity()
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         key = user.encryption_key.encode()
         data = request.get_json()
 
         if not data or 'content' not in data:
                     return jsonify({"error": "Missing 'content' in request body"}), 400
 
+        chat_id = data.get('chat_id')
+        mood_emoji = data.get('mood_emoji')
+
         memory = Memory(
-            user_id=user_id
+            user_id=user_id,
+            chat_id=chat_id,
+            mood_emoji=mood_emoji
         )
         memory.set_content(data['content'], key)
         db.session.add(memory)
@@ -35,7 +40,10 @@ class TaskAPI(MethodView):
             return jsonify({
                 "message": "Task started successfully",
                 "status": "processing",
-                "task_id": task.id
+                "task_id": task.id,
+                "chat_id": chat_id,
+                "mood_emoji": mood_emoji,
+                "memory_id": memory.id
             }), 202
         except Exception as e:
             return jsonify({"error": f"Error starting task: {str(e)}"}), 500
@@ -56,13 +64,14 @@ class TaskStatusAPI(MethodView):
             }
         elif task_result.state == 'SUCCESS':
             result_data = task_result.result
+            memory = None
             
             try:
                 memories = Memory.query.filter_by(user_id=user_id).order_by(Memory.created_at.desc()).limit(1).all()
                 if memories:
                     memory = memories[0]
                     if not memory.model_response or memory.model_response == b'':
-                        user = User.query.get(user_id)
+                        user = db.session.get(User, user_id)
                         key = user.encryption_key.encode()
                         
                         if isinstance(result_data, dict) and 'data' in result_data:
@@ -89,6 +98,10 @@ class TaskStatusAPI(MethodView):
                 'status': 'Task completed successfully',
                 'data': result_data
             }
+            
+            if memory:
+                response['chat_id'] = memory.chat_id
+                response['mood_emoji'] = memory.mood_emoji
         elif task_result.state == 'FAILURE':
             response = {
                 'task_id': task_id,

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from extensions import db
 from werkzeug.security import generate_password_hash, check_password_hash
 from cryptography.fernet import Fernet
@@ -36,6 +36,7 @@ class User(db.Model):
     # Relationships
     memories = db.relationship('Memory', backref='user', lazy=True, cascade='all, delete-orphan')
     reflections = db.relationship('Reflection', backref='user', lazy=True, cascade='all, delete-orphan')
+    prompts = db.relationship('Prompt', backref='user', lazy=True, cascade='all, delete-orphan')
     
     # Encryption
     encryption_key = db.Column(db.String(128), nullable=False, default=lambda: Fernet.generate_key().decode())
@@ -66,8 +67,11 @@ class User(db.Model):
     
     def is_account_locked(self):
         """Check if the account is currently locked."""
-        if self.locked_until and self.locked_until > datetime.now(timezone.utc):
-            return True
+        if self.locked_until:
+            # Ensure both datetimes are timezone-aware for comparison
+            now = datetime.now(timezone.utc)
+            locked_until = self.locked_until.replace(tzinfo=timezone.utc) if self.locked_until.tzinfo is None else self.locked_until
+            return locked_until > now
         return False
     
     def reset_failed_attempts(self):
@@ -81,7 +85,7 @@ class User(db.Model):
         
         # Lock account for 1 hour after 5 failed attempts
         if self.failed_login_attempts >= 5:
-            self.locked_until = datetime.now(timezone.utc).replace(hour=datetime.now(timezone.utc).hour + 1)
+            self.locked_until = datetime.now(timezone.utc) + timedelta(hours=1)
     
     def update_last_login(self):
         """Update the last login timestamp."""
@@ -121,3 +125,11 @@ class User(db.Model):
             })
         
         return data 
+    
+    def deactivate(self):
+        """Deactivate the user account."""
+        self.is_active = False 
+        
+    def activate(self):
+        """Activate the user account."""
+        self.is_active = True 

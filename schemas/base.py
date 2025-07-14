@@ -1,25 +1,31 @@
-from pydantic import BaseModel, EmailStr, constr
+from pydantic import BaseModel, EmailStr, constr, ConfigDict
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel as PydanticBaseModel
 
 class TimestampMixin(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
-
 class UserBase(BaseModel):
+    model_config = ConfigDict()
+    
     email: EmailStr
 
 class BaseResponse(BaseModel):
+    model_config = ConfigDict()
+    
     message: str 
 
 class BaseModel(PydanticBaseModel):
+    model_config = ConfigDict()
     pass
 
-class ErrorResponseSchema(BaseModel, extra="ignore"):
+class ErrorResponseSchema(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
     msg: str | dict | list
     loc: Optional[str] = None
     type: Optional[str] = None

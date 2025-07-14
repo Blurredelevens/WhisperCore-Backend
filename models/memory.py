@@ -9,6 +9,7 @@ class Memory(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    chat_id = db.Column(db.String(255), nullable=True, index=True)
     encrypted_content = db.Column(db.LargeBinary, nullable=False, default=b'')
     model_response = db.Column(db.LargeBinary, nullable=False, default=b'')
     mood = db.Column(db.String(50))
@@ -25,8 +26,27 @@ class Memory(db.Model):
         return {
             'id': self.id,
             'user_id': self.user_id,
+            'chat_id': self.chat_id,
             'content': self.get_content(key),
             'model_response': self.get_model_response(key),
+            'mood': self.mood,
+            'tags': self.tags.split(',') if self.tags else [],
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
+            'image_path': self.image_path,
+            'is_bookmarked': self.is_bookmarked,
+            'mood_emoji': self.mood_emoji,
+            'mood_value': self.mood_value
+        }
+
+    def to_dict_with_keys(self, encryption_key, model_key):
+        """Convert memory object to dictionary using separate keys for content and model_response."""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'chat_id': self.chat_id,
+            'content': self.get_content(encryption_key),
+            'model_response': self.get_model_response(model_key),
             'mood': self.mood,
             'tags': self.tags.split(',') if self.tags else [],
             'created_at': self.created_at.isoformat(),

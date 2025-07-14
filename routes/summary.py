@@ -10,9 +10,11 @@ from datetime import datetime, timezone
 
 summary_bp = Blueprint('summary', __name__)
 
-def get_recent_memories(user_id, count=30):
-    user = User.query.get(user_id)
-    key = user.encryption_key.encode()
+def get_recent_memories(user_id, count):
+    user_id = int(user_id)
+    user = db.session.get(User, user_id)
+    encryption_key = user.encryption_key.encode()
+    model_key = user.model_key.encode()
     memories = (
         Memory.query
         .filter_by(user_id=user_id)
@@ -20,11 +22,12 @@ def get_recent_memories(user_id, count=30):
         .limit(count)
         .all()
     )
+    
     results = []
     for m in memories:
         print(f"Memory ID: {m.id}, model_response: {m.model_response[:50]}...")  # Print first 50 bytes
         try:
-            val = m.get_model_response(key)
+            val = m.get_model_response(model_key)
             print(f"Decrypted value for memory {m.id}: {val}")
             if val:
                 results.append(val)
@@ -70,18 +73,6 @@ class SummaryAPI(MethodView):
             summary_text = summary
         else:
             summary_text = str(summary)
-
-        # Save to Reflection model
-        now = datetime.now(timezone.utc)
-        reflection = Reflection(
-            user_id=user_id,
-            content=summary_text,
-            reflection_type=summary_type,
-            period_start=now, 
-            period_end=now    
-        )
-        db.session.add(reflection)
-        db.session.commit()
 
         return jsonify({
             "summary": summary,

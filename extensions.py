@@ -16,18 +16,13 @@ redis_client = FlaskRedis()
 celery = Celery(
     'whisper_core',
     include=[
-        'tasks.reflection',
-        'tasks.maintenance',
         'tasks.llm_service',
         'tasks.scheduled'
     ]
 )
  
 
-import tasks.reflection
-import tasks.maintenance
-import tasks.llm_service
-import tasks.scheduled
+
 
 def init_extensions(app):
     db.init_app(app)
@@ -38,8 +33,12 @@ def init_extensions(app):
     limiter = Limiter(
         key_func=get_remote_address,
         storage_uri="redis://redis:6379/1",
-        default_limits=["200 per day", "50 per hour"]
+        default_limits=[]
     )
     limiter.init_app(app)
     
     celery.conf.update(app.config)
+    
+    # Import tasks after extensions are initialized to avoid circular imports
+    import tasks.llm_service
+    import tasks.scheduled

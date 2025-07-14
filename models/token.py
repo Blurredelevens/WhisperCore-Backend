@@ -60,8 +60,9 @@ class Token(db.Model):
         token = cls.query.filter_by(jti=jti, is_active=True).first()
         if not token:
             return False
-        # Check if token is expired
-        if token.expires_at < datetime.now(timezone.utc):
+        now = datetime.now(timezone.utc)
+        expires_at = token.expires_at.replace(tzinfo=timezone.utc) if token.expires_at.tzinfo is None else token.expires_at
+        if expires_at < now:
             return False
         return True
     

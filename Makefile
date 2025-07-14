@@ -78,6 +78,9 @@ shell-redis:
 init-db:
 	docker compose exec web flask db init
 
+migration-create:
+	docker compose exec web flask db migrate --rev-id "$(rev)"
+
 migrate:
 	docker compose exec web flask db migrate
 
@@ -105,7 +108,12 @@ reset-db:
 	@echo "Database has been reset successfully."
 # Development commands
 test:
-	docker compose exec web pytest
+	@echo "Running all tests..."
+	pytest tests/ -v --tb=short
+
+test-target:
+	@echo "Running tests for $(TARGET)"
+	pytest $(TARGET) -v --tb=short
 
 lint:
 	docker compose exec web flake8

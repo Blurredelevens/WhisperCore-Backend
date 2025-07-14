@@ -68,11 +68,13 @@ def create_app(config_class=EnvConfig):
     from routes.reflection import reflection_bp
     from routes.task import task_bp
     from routes.summary import summary_bp
+    from routes.prompt import prompt_bp
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(memory_bp, url_prefix='/api/memories')
     app.register_blueprint(reflection_bp, url_prefix='/api/reflections')
     app.register_blueprint(task_bp, url_prefix='/api/task')
     app.register_blueprint(summary_bp, url_prefix='/api/summary')
+    app.register_blueprint(prompt_bp, url_prefix='/api/prompts')
     app.logger.setLevel(logging.INFO)
     @app.before_request
     def log_request_info():

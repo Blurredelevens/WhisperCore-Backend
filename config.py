@@ -93,9 +93,21 @@ class Config(ABC):
                     "task": "tasks.scheduled.heartbeat",
                     "schedule": self.BEAT_SCHEDULE,
                 },
-                "process_query_task": {
+                "process_query_task": { # TODO: remove this
                     "task": "tasks.scheduled.process_query_task",
                     "schedule": self.BEAT_SCHEDULE,
+                },
+                "generate_weekly_summary": {
+                    "task": "tasks.scheduled.generate_weekly_summary",
+                    "schedule": 604800.0,  # 7 days in seconds (weekly)
+                },
+                "generate_monthly_summary": {
+                    "task": "tasks.scheduled.generate_monthly_summary", 
+                    "schedule": 2592000.0,  # 30 days in seconds (monthly)
+                },
+                "send_daily_prompt": {
+                    "task": "tasks.scheduled.send_daily_prompt",
+                    "schedule": 86400.0,  # 24 hours in seconds (daily)
                 }
             },
             'CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP': True,
@@ -148,7 +160,7 @@ class EnvConfig(Config):
 
     @property
     def BEAT_SCHEDULE(self) -> int:
-        return self._env.int('BEAT_SCHEDULE', 120)
+        return self._env.int('BEAT_SCHEDULE', 0)
 
     @property
     def CELERY_BROKER_URL(self) -> str:
@@ -169,7 +181,7 @@ class EnvConfig(Config):
             'result_backend': self.CELERY_RESULT_BACKEND,
             'task_ignore_result': self.TASK_IGNORE_RESULT,
             'broker_connection_retry_on_startup': True,
-            'include': ['tasks.reflection', 'tasks.maintenance', 'tasks.llm_service', 'tasks.scheduled']
+            'include': ['tasks.llm_service', 'tasks.scheduled']
         }
 
     @property
@@ -226,7 +238,7 @@ class AppConfig(Config):
 
     @property
     def BEAT_SCHEDULE(self) -> int:
-        return self._config.get('BEAT_SCHEDULE', 120)
+        return self._config.get('BEAT_SCHEDULE', 0)
 
     @property
     def CELERY_BROKER_URL(self) -> str:
@@ -247,7 +259,7 @@ class AppConfig(Config):
             'result_backend': self.CELERY_RESULT_BACKEND,
             'task_ignore_result': self.TASK_IGNORE_RESULT,
             'broker_connection_retry_on_startup': True,
-            'include': ['tasks.reflection', 'tasks.maintenance', 'tasks.llm_service', 'tasks.scheduled']
+            'include': ['tasks.llm_service', 'tasks.scheduled']
         }
 
     @property

@@ -12,6 +12,7 @@ from extensions import db
 from models.user import User
 from models.token import Token
 from models.memory import Memory
+from models.reflection import Reflection
 from schemas.auth import (
     UserCreate, UserResponse, UserDetailResponse, LoginRequest, 
     PassphraseLoginRequest, CombinedLoginRequest, LoginResponse,
@@ -219,7 +220,7 @@ class AuthRefreshAPI(MethodView):
         if not Token.is_token_active(current_token['jti']):
             return jsonify({'error': 'Token has been revoked or expired'}), 401
         
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         if not user or not user.is_active:
             return jsonify({'error': 'User not found or inactive'}), 404
         
@@ -250,8 +251,8 @@ class AuthLogoutAPI(MethodView):
         current_token = get_jwt()
         user_id = get_jwt_identity()
         
-        # Revoke curren     t token and deactivate all user tokens
-        Token.revoke_token(current_token['jti'])
+        # Revoke current token and deactivate all user tokens
+        Token.revoke_token(current_token['jti']) 
         Token.deactivate_user_tokens(user_id)
         
         return LogoutResponse(message='Successfully logged out').model_dump(), 200
@@ -261,7 +262,7 @@ class AuthProfileAPI(MethodView):
     def get(self):
         """Get current user information."""
         user_id = get_jwt_identity()
-        user = User.query.get(int(user_id))
+        user = db.session.get(User, int(user_id))
         
         if not user:
             return jsonify({'error': 'User not found'}), 404
@@ -279,7 +280,7 @@ class ProfileAPI(MethodView):
     def put(self):
         """Update user profile information."""
         user_id = get_jwt_identity()
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         
         if not user:
             return jsonify({'error': 'User not found'}), 404
@@ -308,7 +309,7 @@ class PasswordChangeAPI(MethodView):
     def post(self):
         """Change user password."""
         user_id = get_jwt_identity()
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         
         if not user:
             return jsonify({'error': 'User not found'}), 404
@@ -335,7 +336,7 @@ class PassphraseSetAPI(MethodView):
     def post(self):
         """Set or update user passphrase."""
         user_id = get_jwt_identity()
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         
         if not user:
             return jsonify({'error': 'User not found'}), 404
@@ -362,7 +363,7 @@ class PassphraseChangeAPI(MethodView):
     def post(self):
         """Change user passphrase."""
         user_id = get_jwt_identity()
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         
         if not user:
             return jsonify({'error': 'User not found'}), 404
@@ -390,9 +391,9 @@ class DashboardAPI(MethodView):
     decorators = [jwt_required()]
     
     def get(self):
-        """Get user dashboard with stats and recent activity."""
+        """Get user dashboard with stats, recent activity, and summaries."""
         user_id = get_jwt_identity()
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         key = user.encryption_key.encode()  # Get the encryption key
 
         # Get recent memories with the key
@@ -401,7 +402,6 @@ class DashboardAPI(MethodView):
             .limit(5)\
             .all()
         
-        
         # Get mood statistics
         mood_stats = db.session.query(
             Memory.mood, 
@@ -409,6 +409,7 @@ class DashboardAPI(MethodView):
         ).filter_by(user_id=user_id)\
          .group_by(Memory.mood)\
          .all()
+        mood_stats = {k: v for k, v in mood_stats if k is not None}
 
         # Get tag statistics
         tag_stats = db.session.query(
@@ -417,14 +418,23 @@ class DashboardAPI(MethodView):
         ).filter_by(user_id=user_id)\
          .group_by(Memory.tags)\
          .all()
+        tag_stats = {k: v for k, v in tag_stats if k is not None}
 
         # Convert memories to dict with the key
         memories_data = [memory.to_dict(key) for memory in recent_memories]
 
+        # Get recent reflections (summaries)
+        reflections = Reflection.query.filter_by(user_id=user_id)\
+            .order_by(Reflection.created_at.desc())\
+            .limit(5)\
+            .all()
+        reflections_data = [reflection.to_dict() for reflection in reflections]
+
         return jsonify({
             'recent_memories': memories_data,
-            'mood_statistics': dict(mood_stats),
-            'tag_statistics': dict(tag_stats)
+            'mood_statistics': mood_stats,
+            'tag_statistics': tag_stats,
+            'recent_summaries': reflections_data
         }), 200
     
 class UserImageUploadAPI(MethodView):
@@ -438,12 +448,12 @@ class UserImageUploadAPI(MethodView):
         # Check if current user is trying to upload for themselves or is admin
         if str(current_user_id) != str(user_id):
             # Check if current user is admin
-            current_user = User.query.get(current_user_id)
+            current_user = db.session.get(User, current_user_id)
             if not current_user or not current_user.is_admin:
                 return jsonify({'error': 'Unauthorized: You can only upload images for your own account'}), 403
         
         # Get the target user
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
@@ -480,12 +490,12 @@ class UserImageDownloadAPI(MethodView):
         # Check if current user is trying to download for themselves or is admin
         if str(current_user_id) != str(user_id):
             # Check if current user is admin
-            current_user = User.query.get(current_user_id)
+            current_user = db.session.get(User, current_user_id)
             if not current_user or not current_user.is_admin:
                 return jsonify({'error': 'Unauthorized: You can only download images for your own account'}), 403
         
         # Get the target user
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         if not user:
             return jsonify({'error': 'User not found'}), 404
         

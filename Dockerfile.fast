@@ -1,0 +1,61 @@
+# Multi-stage build for faster builds and smaller images
+FROM python:3.11.11-slim as builder
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    portaudio19-dev \
+    python3-pyaudio \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set work directory
+WORKDIR /app
+
+# Copy base requirements first (these change less frequently)
+COPY requirements-base.txt .
+
+# Install base dependencies
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements-base.txt
+
+# Copy ML requirements and install them separately
+COPY requirements-ml.txt .
+RUN pip install --no-cache-dir -r requirements-ml.txt
+
+# Production stage
+FROM python:3.11.11-slim
+
+# Install only runtime system dependencies
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    portaudio19-dev \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set work directory
+WORKDIR /app
+
+# Copy Python packages from builder stage
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /app/instance /app/logs
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYDEVD_DISABLE_FILE_VALIDATION=1
+ENV FLASK_APP=app.py
+ENV FLASK_ENV=production
+
+# Expose the port
+EXPOSE 5000
+
+# Run the application with Gunicorn
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--timeout", "300", "--workers", "1", "--worker-class", "sync", "app:create_app()"] 

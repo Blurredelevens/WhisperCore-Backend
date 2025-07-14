@@ -8,7 +8,7 @@ class Reflection(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    reflection_type = db.Column(db.String(20), nullable=False)  # 'weekly' or 'monthly'
+    reflection_type = db.Column(db.String(20), nullable=False)
     period_start = db.Column(db.DateTime, nullable=False)
     period_end = db.Column(db.DateTime, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
