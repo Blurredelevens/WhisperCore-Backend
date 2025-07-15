@@ -177,7 +177,9 @@ class TestMemoryEncryption:
         # Check that the content is encrypted in the database
         memory = db_session.query(Memory).filter_by(id=memory_id).first()
         assert memory.encrypted_content != sensitive_content.encode()  # Should be encrypted
-        assert memory.get_content(user.encryption_key.encode()) == sensitive_content  # Should decrypt correctly
+        assert (
+            memory._decrypt(memory.encrypted_content, user.encryption_key.encode()) == sensitive_content
+        )  # Should decrypt correctly
 
     def test_memory_decryption(self, client, db_session, auth_headers, user):
         """Test that memory content can be properly decrypted."""
@@ -218,27 +220,26 @@ class TestMemoryValidation:
     def test_get_memories_grouped_by_chat_id(self, client, db_session, auth_headers, user):
         """Test getting memories grouped by chat_id."""
         # Create memories with different chat_ids
-        key = user.encryption_key.encode()
-        model_key = user.model_key.encode()
+        encryption_key = user.encryption_key.encode()
 
         # Create memories for chat_id "chat1"
         for i in range(2):
             memory = Memory(user_id=user.id, chat_id="chat1", mood_emoji="😊")
-            memory.set_content(f"Memory {i} for chat1", key)
-            memory.set_model_response(f"Response {i} for chat1", model_key)
+            memory.set_content(f"Memory {i} for chat1", encryption_key)
+            memory.set_model_response(f"Response {i} for chat1", encryption_key)
             db_session.add(memory)
 
         # Create memories for chat_id "chat2"
         for i in range(3):
             memory = Memory(user_id=user.id, chat_id="chat2", mood_emoji="😢")
-            memory.set_content(f"Memory {i} for chat2", key)
-            memory.set_model_response(f"Response {i} for chat2", model_key)
+            memory.set_content(f"Memory {i} for chat2", encryption_key)
+            memory.set_model_response(f"Response {i} for chat2", encryption_key)
             db_session.add(memory)
 
         # Create a memory without chat_id
         memory = Memory(user_id=user.id, mood_emoji="😐")
-        memory.set_content("Memory without chat_id", key)
-        memory.set_model_response("Response without chat_id", model_key)
+        memory.set_content("Memory without chat_id", encryption_key)
+        memory.set_model_response("Response without chat_id", encryption_key)
         db_session.add(memory)
 
         db_session.commit()

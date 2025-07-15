@@ -113,12 +113,13 @@ def send_daily_prompt():
         if result["success"]:
             TaskLogger.log_task_success(
                 "send_daily_prompt",
-                result=f"Created {result['successful_prompts']} prompts",
+                result=f"Created {result['total_prompts_generated']} prompts",
                 successful=result["successful_prompts"],
                 failed=result["failed_prompts"],
             )
             return (
                 f"Daily prompts created for {result['successful_prompts']} users, "
+                f"Total prompts: {result['total_prompts_generated']}, "
                 f"Failed: {result['failed_prompts']}"
             )
         else:

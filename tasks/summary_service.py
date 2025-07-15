@@ -16,7 +16,11 @@ class SummaryService:
 
     def get_memories_for_period(self, user_id: int, start_date: datetime, end_date: datetime) -> list:
         """Get memories for a user within a date range"""
-        model_key = self._get_user_model_key(user_id)
+        user = db.session.get(User, user_id)
+        if not user:
+            logger.error(f"User {user_id} not found")
+            return []
+
         memories = (
             Memory.query.filter_by(user_id=user_id)
             .filter(Memory.created_at >= start_date)
@@ -36,7 +40,8 @@ class SummaryService:
 
         for memory in memories:
             try:
-                val = memory.get_model_response(model_key)
+                # Use the new _decrypt method directly
+                val = memory._decrypt(memory.model_response, user.encryption_key.encode())
                 if val:
                     memory_texts.append(val)
                     successful_decryptions += 1
@@ -106,11 +111,3 @@ class SummaryService:
             return User.query.filter_by(is_active=True, monthly_summary_enabled=True).all()
         else:
             return []
-
-    def _get_user_model_key(self, user_id: int) -> bytes:
-        """Get user's model key for decryption"""
-        user = db.session.get(User, user_id)
-        if not user:
-            logger.error(f"User {user_id} not found")
-            return None
-        return user.model_key.encode()

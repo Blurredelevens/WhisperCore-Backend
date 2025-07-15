@@ -64,6 +64,17 @@ class Prompt(db.Model):
         )
 
     @staticmethod
+    def get_today_prompts(user_id):
+        """Get all today's prompts for a user."""
+        today = datetime.now(timezone.utc).date()
+        return (
+            Prompt.query.filter_by(user_id=user_id, is_active=True)
+            .filter(db.func.date(Prompt.created_at) == today)
+            .order_by(Prompt.created_at.desc())
+            .all()
+        )
+
+    @staticmethod
     def create_daily_prompt(user_id, prompt_text):
         # TOOD: Change this to use llm
         """Create a new daily prompt for a user."""
@@ -79,3 +90,10 @@ class Prompt(db.Model):
         daily_prompt = Prompt(user_id=user_id, text=prompt_text, is_active=True)
         daily_prompt.save()
         return daily_prompt
+
+    @staticmethod
+    def create_personalized_prompt(user_id, prompt_text):
+        """Create a personalized prompt for a user (allows multiple per day)."""
+        personalized_prompt = Prompt(user_id=user_id, text=prompt_text, is_active=True)
+        personalized_prompt.save()
+        return personalized_prompt

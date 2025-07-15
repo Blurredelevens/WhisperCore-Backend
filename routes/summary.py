@@ -17,7 +17,7 @@ summary_bp = Blueprint("summary", __name__)
 def get_recent_memories(user_id, start_date, end_date):
     """Get memories for a user within a date range"""
     user = db.session.get(User, user_id)
-    model_key = user.model_key.encode()
+    encryption_key = user.encryption_key.encode()
     memories = (
         Memory.query.filter_by(user_id=user_id)
         .filter(Memory.created_at >= start_date)
@@ -29,7 +29,7 @@ def get_recent_memories(user_id, start_date, end_date):
     memory_texts = []
     for memory in memories:
         try:
-            val = memory.get_model_response(model_key)
+            val = memory._decrypt(memory.model_response, encryption_key)
             if val:
                 memory_texts.append(val)
         except Exception as e:

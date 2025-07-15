@@ -48,7 +48,7 @@ class MemoryFactory(factory.alchemy.SQLAlchemyModelFactory):
             if user:
                 content = factory.Faker("paragraph").generate()
                 self.set_content(content, user.encryption_key.encode())
-                self.set_model_response(f"AI response to: {content}", user.model_key.encode())
+                self.set_model_response(f"AI response to: {content}", user.encryption_key.encode())
 
 
 class ReflectionFactory(factory.alchemy.SQLAlchemyModelFactory):

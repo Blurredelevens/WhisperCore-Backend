@@ -35,8 +35,8 @@ class Memory(db.Model):
             "id": self.id,
             "user_id": self.user_id,
             "chat_id": self.chat_id,
-            "content": self.get_content(key),
-            "model_response": self.get_model_response(key),
+            "content": self._decrypt(self.encrypted_content, key),
+            "model_response": self._decrypt(self.model_response, key),
             "mood": self.mood,
             "tags": self.tags.split(",") if self.tags else [],
             "created_at": self.created_at.isoformat(),
@@ -51,22 +51,15 @@ class Memory(db.Model):
         cipher = Fernet(key)
         self.encrypted_content = cipher.encrypt(content.encode())
 
-    def get_content(self, key):
+    def _decrypt(self, encrypted_data, key):
+        """Shared decryption method for both content and model_response."""
         cipher = Fernet(key)
         try:
-            return cipher.decrypt(self.encrypted_content).decode()
+            return cipher.decrypt(encrypted_data).decode()
         except Exception as e:
-            logging.getLogger(__name__).error(f"Decryption failed for content: {e}")
+            logging.getLogger(__name__).error(f"Decryption failed: {e}")
             return None
 
     def set_model_response(self, model_response, key):
         cipher = Fernet(key)
         self.model_response = cipher.encrypt(model_response.encode())
-
-    def get_model_response(self, key):
-        cipher = Fernet(key)
-        try:
-            return cipher.decrypt(self.model_response).decode()
-        except Exception as e:
-            logging.getLogger(__name__).error(f"Decryption failed for model_response: {e}")
-            return None

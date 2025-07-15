@@ -1,8 +1,8 @@
-"""empty message
+"""Initial migration
 
-Revision ID: b5d2347bfe66
+Revision ID: b49b498762d5
 Revises:
-Create Date: 2025-07-02 07:56:05.415124
+Create Date: 2025-07-15 13:50:50.626363
 
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "b5d2347bfe66"
+revision = "b49b498762d5"
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -30,13 +30,14 @@ def upgrade():
         sa.Column("passphrase_hash", sa.String(length=255), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=False),
         sa.Column("email_verified", sa.Boolean(), nullable=False),
+        sa.Column("weekly_summary_enabled", sa.Boolean(), nullable=True),
+        sa.Column("monthly_summary_enabled", sa.Boolean(), nullable=True),
         sa.Column("failed_login_attempts", sa.Integer(), nullable=False),
         sa.Column("locked_until", sa.DateTime(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
         sa.Column("last_login", sa.DateTime(), nullable=True),
         sa.Column("encryption_key", sa.String(length=128), nullable=False),
-        sa.Column("model_key", sa.String(length=128), nullable=False),
         sa.Column("is_admin", sa.Boolean(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -47,6 +48,7 @@ def upgrade():
         "memories",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column("chat_id", sa.String(length=255), nullable=True),
         sa.Column("encrypted_content", sa.LargeBinary(), nullable=False),
         sa.Column("model_response", sa.LargeBinary(), nullable=False),
         sa.Column("mood", sa.String(length=50), nullable=True),
@@ -57,6 +59,23 @@ def upgrade():
         sa.Column("updated_at", sa.DateTime(), nullable=True),
         sa.Column("mood_emoji", sa.String(length=50), nullable=True),
         sa.Column("mood_value", sa.Integer(), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["user_id"],
+            ["users.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    with op.batch_alter_table("memories", schema=None) as batch_op:
+        batch_op.create_index(batch_op.f("ix_memories_chat_id"), ["chat_id"], unique=False)
+
+    op.create_table(
+        "prompts",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column("text", sa.Text(), nullable=False),
+        sa.Column("is_active", sa.Boolean(), nullable=True),
+        sa.Column("created_at", sa.DateTime(), nullable=True),
+        sa.Column("updated_at", sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(
             ["user_id"],
             ["users.id"],
@@ -107,6 +126,10 @@ def downgrade():
 
     op.drop_table("tokens")
     op.drop_table("reflections")
+    op.drop_table("prompts")
+    with op.batch_alter_table("memories", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_memories_chat_id"))
+
     op.drop_table("memories")
     with op.batch_alter_table("users", schema=None) as batch_op:
         batch_op.drop_index(batch_op.f("ix_users_email"))

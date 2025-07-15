@@ -61,7 +61,7 @@ class MemoryListAPI(MethodView):
             filtered_memories = []
             for memory in all_memories:
                 try:
-                    content = memory.get_content(key)
+                    content = memory._decrypt(memory.encrypted_content, key)
                     if content and search_query.lower() in content.lower():
                         filtered_memories.append(memory)
                 except Exception:
@@ -184,7 +184,7 @@ class MemoryListAPI(MethodView):
                 tags=",".join(data.get("tags", [])),
             )
             memory.set_content(content, key)
-            memory.set_model_response(data["model_response"], user.model_key.encode())
+            memory.set_model_response(data["model_response"], key)
             db.session.add(memory)
             db.session.commit()
 

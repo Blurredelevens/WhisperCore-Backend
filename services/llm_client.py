@@ -5,7 +5,17 @@ import requests
 
 from schemas.llm import LLMGenerateRequest, LLMGenerateResponse, LLMModelsResponse
 
+# Configure logging for Docker
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Add console handler if not already present
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
 
 class LLMClient:
