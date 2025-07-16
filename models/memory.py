@@ -20,6 +20,7 @@ class Memory(db.Model):
     tags = db.Column(db.String(200))
     image_path = db.Column(db.String(255))
     is_bookmarked = db.Column(db.Boolean, default=False)
+    memory_weight = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(
         db.DateTime,
@@ -43,6 +44,7 @@ class Memory(db.Model):
             "updated_at": self.updated_at.isoformat(),
             "image_path": self.image_path,
             "is_bookmarked": self.is_bookmarked,
+            "memory_weight": self.memory_weight,
             "mood_emoji": self.mood_emoji,
             "mood_value": self.mood_value,
         }

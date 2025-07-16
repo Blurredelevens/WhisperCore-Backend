@@ -119,15 +119,15 @@ class Config(ABC):
                 },
                 "generate_weekly_summary": {
                     "task": "tasks.scheduled.generate_weekly_summary",
-                    "schedule": 120.0,  # 2 minutes for testing (weekly)
+                    "schedule": 604800.0,  # 7 days (weekly)
                 },
                 "generate_monthly_summary": {
                     "task": "tasks.scheduled.generate_monthly_summary",
-                    "schedule": 180.0,  # 3 minutes for testing (monthly)
+                    "schedule": 2592000.0,  # 30 days (monthly)
                 },
                 "send_daily_prompt": {
                     "task": "tasks.scheduled.send_daily_prompt",
-                    "schedule": 240.0,  # 4 minutes for testing (daily)
+                    "schedule": 86400.0,  # 24 hours (daily)
                 },
             },
         }
@@ -184,15 +184,15 @@ class EnvConfig(Config):
 
     @property
     def WEEKLY_SUMMARY_SCHEDULE(self) -> Dict[str, Any]:
-        return {"task": "tasks.scheduled.generate_weekly_summary", "schedule": 120.0}  # 2 minutes for testing
+        return {"task": "tasks.scheduled.generate_weekly_summary", "schedule": 604800.0}  # 7 days (weekly)
 
     @property
     def MONTHLY_SUMMARY_SCHEDULE(self) -> Dict[str, Any]:
-        return {"task": "tasks.scheduled.generate_monthly_summary", "schedule": 180.0}  # 3 minutes for testing
+        return {"task": "tasks.scheduled.generate_monthly_summary", "schedule": 2592000.0}  # 30 days (monthly)
 
     @property
     def DAILY_PROMPT_SCHEDULE(self) -> Dict[str, Any]:
-        return {"task": "tasks.scheduled.send_daily_prompt", "schedule": 240.0}  # 4 minutes for testing
+        return {"task": "tasks.scheduled.send_daily_prompt", "schedule": 86400.0}  # 24 hours (daily)
 
     @property
     def CELERY_BROKER_URL(self) -> str:
@@ -269,15 +269,15 @@ class AppConfig(Config):
 
     @property
     def WEEKLY_SUMMARY_SCHEDULE(self) -> Dict[str, Any]:
-        return {"task": "tasks.scheduled.generate_weekly_summary", "schedule": 120.0}  # 2 minutes for testing
+        return {"task": "tasks.scheduled.generate_weekly_summary", "schedule": 604800.0}  # 7 days (weekly)
 
     @property
     def MONTHLY_SUMMARY_SCHEDULE(self) -> Dict[str, Any]:
-        return {"task": "tasks.scheduled.generate_monthly_summary", "schedule": 180.0}  # 3 minutes for testing
+        return {"task": "tasks.scheduled.generate_monthly_summary", "schedule": 2592000.0}  # 30 days (monthly)
 
     @property
     def DAILY_PROMPT_SCHEDULE(self) -> Dict[str, Any]:
-        return {"task": "tasks.scheduled.send_daily_prompt", "schedule": 240.0}  # 4 minutes for testing
+        return {"task": "tasks.scheduled.send_daily_prompt", "schedule": 86400.0}  # 24 hours (daily)
 
     @property
     def CELERY_BROKER_URL(self) -> str:

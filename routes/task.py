@@ -33,34 +33,55 @@ class TaskAPI(MethodView):
         db.session.commit()
 
         try:
-            # Use LLM client with long polling instead of Celery task
+            # Use LLM client to generate both reflection and weight in a single call
             logger.info("Creating LLM client...")
             llm_client = get_llm_client()
             logger.info(f"LLM client created successfully with base URL: {llm_client.base_url}")
 
-            # Generate response using long polling
-            logger.info(f"Starting LLM generation with prompt: {data['content'][:100]}...")
-            response_text = llm_client.generate_with_long_polling(
-                prompt=data["content"],
+            # Get user's tone preference, default to "empathetic" if not set
+            user_tone = user.tone if user.tone else "empathetic"
+
+            # Generate both reflection and weight using single LLM call
+            logger.info(f"Starting LLM generation for reflection and weight with content: {data['content'][:100]}...")
+            reflection_text, weight = llm_client.generate_reflection_and_weight(
+                memory_content=data["content"],
+                tone=user_tone,
                 model="llama3:8b",
                 max_retries=3,
                 retry_delay=1.0,
             )
-            logger.info(f"LLM generation completed successfully. Response length: {len(response_text)}")
+            logger.info(
+                f"LLM generation completed successfully. Reflection length: {len(reflection_text)}, Weight: {weight}",
+            )
+            logger.info(f"Extracted weight type: {type(weight)}, value: {weight}")
 
-            # Save the response to memory using the same encryption key
-            logger.info("Saving response to memory...")
-            memory.set_model_response(response_text, key)  # Use the same key as content
+            # Update memory with weight and save the reflection
+            logger.info(f"Before update - Memory weight: {memory.memory_weight}")
+            memory.memory_weight = weight
+            logger.info(f"After update - Memory weight: {memory.memory_weight}")
+            memory.set_model_response(reflection_text, key)
+
+            # Verify the weight is set before commit
+            logger.info(f"Before commit - Memory weight: {memory.memory_weight}")
             db.session.commit()
-            logger.info(f"Response saved to memory ID: {memory.id}")
+            logger.info(f"After commit - Memory weight: {memory.memory_weight}")
+
+            # Refresh from database to verify
+            db.session.refresh(memory)
+            logger.info(f"After refresh - Memory weight: {memory.memory_weight}")
+
+            logger.info(f"Memory updated with weight {weight} and reflection saved to memory ID: {memory.id}")
 
             return (
                 jsonify(
                     {
                         "message": "Task completed successfully",
                         "status": "completed",
-                        "response": response_text,
+                        "response": reflection_text,
                         "memory_id": memory.id,
+                        "memory_weight": weight,
+                        "chat_id": data.get("chat_id"),
+                        "mood_emoji": data.get("mood_emoji"),
                     },
                 ),
                 200,

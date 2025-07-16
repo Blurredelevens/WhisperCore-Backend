@@ -134,6 +134,179 @@ class LLMClient:
                     logger.error(f"All {max_retries} attempts failed")
                     raise
 
+    def generate_reflection_and_weight(
+        self,
+        memory_content: str,
+        tone: str = "empathetic",
+        model: str = "llama3:8b",
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
+    ) -> tuple[str, int]:
+        """
+        Generate both reflection and weight in a single LLM call
+
+        Args:
+            memory_content: The memory content to analyze
+            tone: The AI confidant tone (empathetic, supportive, analytical, casual, professional)
+            model: The model to use for generation
+            max_retries: Maximum number of retries
+            retry_delay: Delay between retries in seconds
+
+        Returns:
+            Tuple of (reflection_text, weight_number)
+        """
+        prompt = self._generate_ai_confidant_prompt(memory_content, tone)
+
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"Attempt {attempt + 1}/{max_retries} to generate reflection and weight with tone: {tone}")
+
+                # Use long polling method
+                result = self.generate_with_long_polling(
+                    prompt=prompt,
+                    model=model,
+                    max_retries=1,  # Single attempt since we're already in retry loop
+                    retry_delay=retry_delay,
+                )
+
+                if result:
+                    logger.info(f"Successfully generated reflection and weight with {len(result)} characters")
+                    reflection, weight = self._extract_reflection_and_weight(result)
+                    return reflection, weight
+                else:
+                    logger.warning("Generation returned empty response")
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
+                    else:
+                        raise ValueError("Generation did not complete successfully")
+
+            except (requests.exceptions.RequestException, TimeoutError, ValueError) as e:
+                logger.warning(f"Attempt {attempt + 1} failed: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    logger.error(f"All {max_retries} attempts failed")
+                    raise
+
+    def _extract_reflection_and_weight(self, response: str) -> tuple[str, int]:
+        """Extract reflection text and weight number from LLM response"""
+        try:
+            logger.info(f"Raw LLM response: {response}")
+            lines = response.strip().split("\n")
+            reflection_lines = []
+            weight = 0
+
+            logger.info(f"Processing {len(lines)} lines from response")
+
+            for i, line in enumerate(lines):
+                line = line.strip()
+                logger.info(f"Line {i}: '{line}'")
+
+                if line.startswith("REFLECTION:"):
+                    logger.info("Found REFLECTION: marker")
+                    # Start collecting reflection text
+                    continue
+                elif line.startswith("WEIGHT:"):
+                    logger.info(f"Found WEIGHT: marker in line: '{line}'")
+                    # Extract weight number
+                    weight_text = line.replace("WEIGHT:", "").strip()
+                    logger.info(f"Weight text after cleanup: '{weight_text}'")
+                    import re
+
+                    numbers = re.findall(r"\b\d+\b", weight_text)
+                    logger.info(f"Found numbers: {numbers}")
+                    if numbers:
+                        weight = int(numbers[0])
+                        logger.info(f"Extracted weight: {weight}")
+                        if not (1 <= weight <= 10):
+                            logger.warning(f"Weight {weight} out of range, using default 5")
+                            weight = 5
+                    else:
+                        logger.warning("No numbers found in WEIGHT line")
+                    break
+                elif (
+                    line and not line.startswith("Weight Guidelines") and not line.startswith("Consider these factors")
+                ):
+                    # Add to reflection if it's not a header
+                    reflection_lines.append(line)
+                    logger.info(f"Added to reflection: '{line}'")
+
+            reflection = "\n".join(reflection_lines).strip()
+
+            # If no reflection was extracted, use the full response
+            if not reflection:
+                logger.warning("No reflection extracted, using full response")
+                reflection = response.strip()
+
+            logger.info(f"Final extracted reflection ({len(reflection)} chars): {reflection[:100]}...")
+            logger.info(f"Final extracted weight: {weight}")
+            return reflection, weight
+
+        except Exception as e:
+            logger.error(f"Error extracting reflection and weight from response: {e}")
+            return response.strip(), 5
+
+    def _generate_ai_confidant_prompt(self, memory_content: str, tone: str = "empathetic") -> str:
+        """
+        Generate AI confidant prompt for memory reflection and weighting
+
+        Args:
+            memory_content: The memory content to analyze
+            tone: The AI confidant tone
+
+        Returns:
+            Formatted prompt string
+        """
+        return f"""
+    You are WhisperCore, an AI confidant designed to help users process
+    their daily experiences with emotional intelligence and personal growth insights.
+    Think of yourself as a trusted friend who combines the simplicity of Daylio's mood
+    tracking with deep, meaningful AI-powered reflection.
+
+    Your role is to:
+    - Capture the emotional essence of the user's experience
+    - Provide thoughtful, personalized insights that encourage self-reflection
+    - Help users recognize patterns, growth opportunities, and meaningful moments
+    - Maintain a consistent, supportive presence that feels both human and intelligent
+
+    Memory to reflect on: {memory_content}
+    Your tone: {tone}
+
+    Please respond in the following format:
+
+    REFLECTION:
+    [As WhisperCore, provide a {tone} reflection on this memory. Consider:
+    - The emotional journey and impact of this experience
+    - What this reveals about the user's values, growth, or patterns
+    - Potential insights or learning opportunities
+    - How this moment fits into their broader life narrative
+    - Gentle encouragement or perspective that feels genuinely supportive
+
+    Keep your response warm, insightful, and focused on the user's personal growth.
+    Avoid generic advice - make it feel like you truly understand their unique experience.
+
+    WEIGHT: [number]
+
+    Weight Guidelines (1-10):
+    - 1-2: Minor daily events, routine activities, simple pleasures
+    - 3-4: Regular experiences with mild emotions, small wins or challenges
+    - 5-6: Notable experiences with moderate emotions, learning moments
+    - 7-8: Significant events with strong emotions, important insights or achievements
+    - 9-10: Life-changing events, major achievements, profound insights, or deeply meaningful moments
+
+    Consider these factors when assigning weight:
+    - Emotional intensity and depth of feeling
+    - Life impact and significance to the user's journey
+    - Personal growth potential and learning value
+    - Relationship importance and social connection
+    - Achievement or milestone value
+    - How this moment contributes to their overall well-being
+
+    Return only the reflection text and weight number in the exact format above.
+    """
+
     def health_check(self) -> bool:
         """Check if the LLM API is healthy"""
         try:

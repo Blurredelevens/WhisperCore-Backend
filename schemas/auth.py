@@ -112,12 +112,22 @@ class ProfileUpdateRequest(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     bio: Optional[str] = None
+    tone: Optional[str] = None
 
     @field_validator("first_name", "last_name")
     @classmethod
     def validate_names(cls, v):
         if v is not None and v.strip() == "":
             raise ValueError("Name cannot be empty")
+        return v
+
+    @field_validator("tone")
+    @classmethod
+    def validate_tone(cls, v):
+        if v is not None:
+            valid_tones = ["empathetic", "supportive", "analytical", "casual", "professional"]
+            if v not in valid_tones:
+                raise ValueError(f"Invalid tone. Must be one of: {', '.join(valid_tones)}")
         return v
 
 

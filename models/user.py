@@ -32,6 +32,13 @@ class User(db.Model):
     weekly_summary_enabled = db.Column(db.Boolean, default=True)
     monthly_summary_enabled = db.Column(db.Boolean, default=True)
 
+    # AI Confidant preferences
+    tone = db.Column(
+        db.String(50),
+        default="empathetic",
+        nullable=True,
+    )  # empathetic, supportive, analytical, casual, professional
+
     # Security
     failed_login_attempts = db.Column(db.Integer, default=0, nullable=False)
     locked_until = db.Column(db.DateTime)
@@ -132,6 +139,7 @@ class User(db.Model):
             "is_admin": self.is_admin,
             "weekly_summary_enabled": self.weekly_summary_enabled,
             "monthly_summary_enabled": self.monthly_summary_enabled,
+            "tone": self.tone,
         }
 
         if include_sensitive:

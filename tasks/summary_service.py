@@ -14,8 +14,14 @@ class SummaryService:
     def __init__(self):
         self.llm_client = get_llm_client()
 
-    def get_memories_for_period(self, user_id: int, start_date: datetime, end_date: datetime) -> list:
-        """Get memories for a user within a date range"""
+    def get_memories_for_period(
+        self,
+        user_id: int,
+        start_date: datetime,
+        end_date: datetime,
+        min_weight: int = 7,
+    ) -> list:
+        """Get memories for a user within a date range, filtered by minimum weight"""
         user = db.session.get(User, user_id)
         if not user:
             logger.error(f"User {user_id} not found")
@@ -25,12 +31,13 @@ class SummaryService:
             Memory.query.filter_by(user_id=user_id)
             .filter(Memory.created_at >= start_date)
             .filter(Memory.created_at <= end_date)
-            .order_by(Memory.created_at.desc())
+            .filter(Memory.memory_weight >= min_weight)
+            .order_by(Memory.memory_weight.desc(), Memory.created_at.desc())
             .all()
         )
 
         logger.info(
-            f"Found {len(memories)} memories for user {user_id} from "
+            f"Found {len(memories)} memories with weight >= {min_weight} for user {user_id} from "
             f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
         )
 
@@ -45,6 +52,7 @@ class SummaryService:
                 if val:
                     memory_texts.append(val)
                     successful_decryptions += 1
+                    logger.debug(f"Memory {memory.id} has weight {memory.memory_weight}")
                 else:
                     logger.warning(f"Memory {memory.id} returned None after decryption")
                     failed_decryptions += 1
@@ -53,10 +61,58 @@ class SummaryService:
                 failed_decryptions += 1
 
         logger.info(
-            f"Successfully decrypted {successful_decryptions} memories, "
+            f"Successfully decrypted {successful_decryptions} memories (weight >= {min_weight}), "
             f"failed {failed_decryptions} for user {user_id}",
         )
         return memory_texts
+
+    def get_weighted_memories_for_period(
+        self,
+        user_id: int,
+        start_date: datetime,
+        end_date: datetime,
+        min_weight: int = 7,
+    ) -> list:
+        """Get memories with their weights for a user within a date range"""
+        user = db.session.get(User, user_id)
+        if not user:
+            logger.error(f"User {user_id} not found")
+            return []
+
+        memories = (
+            Memory.query.filter_by(user_id=user_id)
+            .filter(Memory.created_at >= start_date)
+            .filter(Memory.created_at <= end_date)
+            .filter(Memory.memory_weight >= min_weight)
+            .order_by(Memory.memory_weight.desc(), Memory.created_at.desc())
+            .all()
+        )
+
+        weighted_memories = []
+        successful_decryptions = 0
+        failed_decryptions = 0
+
+        for memory in memories:
+            try:
+                # Use the new _decrypt method directly
+                val = memory._decrypt(memory.model_response, user.encryption_key.encode())
+                if val:
+                    weighted_memories.append(
+                        {"content": val, "weight": memory.memory_weight, "created_at": memory.created_at},
+                    )
+                    successful_decryptions += 1
+                else:
+                    logger.warning(f"Memory {memory.id} returned None after decryption")
+                    failed_decryptions += 1
+            except Exception as e:
+                logger.error(f"Decryption failed for memory {memory.id}: {e}")
+                failed_decryptions += 1
+
+        logger.info(
+            f"Successfully decrypted {successful_decryptions} weighted memories (weight >= {min_weight}), "
+            f"failed {failed_decryptions} for user {user_id}",
+        )
+        return weighted_memories
 
     def generate_summary(self, memories: list, start_date: datetime, end_date: datetime, summary_type: str) -> str:
         """Generate summary from memories using LLM with long polling"""

@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, current_app, jsonify, request, send_file
 from flask.views import MethodView
@@ -27,6 +28,7 @@ class MemoryListAPI(MethodView):
         mood_emoji = request.args.get("mood_emoji")
         tag = request.args.get("tag")
         chat_id = request.args.get("chat_id")
+        memory_weight = request.args.get("memory_weight")
         group_by_chat_id = request.args.get("group_by_chat_id", "false").lower() == "true"
 
         # Pagination parameters
@@ -51,6 +53,9 @@ class MemoryListAPI(MethodView):
 
         if chat_id:
             query = query.filter_by(chat_id=chat_id)
+
+        if memory_weight:
+            query = query.filter_by(memory_weight=memory_weight)
 
         # Handle search query - get all memories and filter in Python since content is encrypted
         if search_query:
@@ -335,6 +340,231 @@ class MemoryBookmarkAPI(MethodView):
         return jsonify({"id": memory.id, "is_bookmarked": memory.is_bookmarked}), 200
 
 
+class MemoryTrendAPI(MethodView):
+    decorators = [jwt_required()]
+
+    def get(self):
+        user_id = get_jwt_identity()
+        user = db.session.get(User, user_id)
+        key = user.encryption_key.encode()
+
+        # Get all memories for the user
+        memories = Memory.query.filter_by(user_id=user_id).order_by(Memory.created_at.desc()).all()
+
+        if not memories:
+            return (
+                jsonify(
+                    {
+                        "stats": {
+                            "total_entries": 0,
+                            "current_streak": 0,
+                            "average_mood": "No data",
+                            "top_categories": [],
+                            "mood_distribution": {},
+                        },
+                        "weekly_trend": [],
+                        "monthly_insights": {
+                            "most_productive_day": "No data",
+                            "most_common_mood": "No data",
+                            "total_words_written": 0,
+                            "average_entries_per_day": 0,
+                        },
+                    },
+                ),
+                200,
+            )
+
+        # Calculate basic stats
+        total_entries = len(memories)
+
+        # Calculate current streak
+        current_streak = self._calculate_current_streak(memories)
+
+        # Calculate mood distribution and average
+        mood_distribution, average_mood = self._calculate_mood_stats(memories)
+
+        # Calculate top categories (tags)
+        top_categories = self._calculate_top_categories(memories)
+
+        # Calculate weekly trend
+        weekly_trend = self._calculate_weekly_trend(memories, key)
+
+        # Calculate monthly insights
+        monthly_insights = self._calculate_monthly_insights(memories, key)
+
+        return (
+            jsonify(
+                {
+                    "stats": {
+                        "total_entries": total_entries,
+                        "current_streak": current_streak,
+                        "average_mood": average_mood,
+                        "top_categories": top_categories,
+                        "mood_distribution": mood_distribution,
+                    },
+                    "weekly_trend": weekly_trend,
+                    "monthly_insights": monthly_insights,
+                },
+            ),
+            200,
+        )
+
+    def _calculate_current_streak(self, memories):
+        """Calculate current streak of consecutive days with entries"""
+        if not memories:
+            return 0
+
+        # Sort memories by date (newest first)
+        sorted_memories = sorted(memories, key=lambda x: x.created_at.date(), reverse=True)
+
+        streak = 0
+        current_date = datetime.now(timezone.utc).date()
+
+        for memory in sorted_memories:
+            memory_date = memory.created_at.date()
+            days_diff = (current_date - memory_date).days
+
+            if days_diff == streak:
+                streak += 1
+            elif days_diff > streak:
+                break
+
+        return streak
+
+    def _calculate_mood_stats(self, memories):
+        """Calculate mood distribution and average mood"""
+        mood_counts = {}
+        total_mood_entries = 0
+
+        # Count mood emojis
+        for memory in memories:
+            if memory.mood_emoji:
+                mood_counts[memory.mood_emoji] = mood_counts.get(memory.mood_emoji, 0) + 1
+                total_mood_entries += 1
+
+        # Define mood hierarchy for averaging
+        mood_hierarchy = {"😍": 10, "😊": 9, "😄": 8, "🙂": 7, "😐": 6, "😕": 5, "😟": 4, "😢": 3, "😭": 2, "😱": 1}
+
+        # Calculate average mood
+        if total_mood_entries > 0:
+            total_mood_value = 0
+            for mood_emoji, count in mood_counts.items():
+                mood_value = mood_hierarchy.get(mood_emoji, 5)  # Default to neutral
+                total_mood_value += mood_value * count
+
+            average_mood_value = total_mood_value / total_mood_entries
+
+            # Convert back to mood name
+            if average_mood_value >= 8:
+                average_mood = "Happy"
+            elif average_mood_value >= 6:
+                average_mood = "Good"
+            elif average_mood_value >= 4:
+                average_mood = "Okay"
+            elif average_mood_value >= 2:
+                average_mood = "Down"
+            else:
+                average_mood = "Bad"
+        else:
+            average_mood = "No data"
+
+        return mood_counts, average_mood
+
+    def _calculate_top_categories(self, memories):
+        """Calculate top categories based on tags"""
+        tag_counts = {}
+
+        for memory in memories:
+            if memory.tags:
+                tags = memory.tags.split(",")
+                for tag in tags:
+                    tag = tag.strip()
+                    if tag:
+                        tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+        # Sort by count and return top 5
+        sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
+        return [tag for tag, count in sorted_tags[:5]]
+
+    def _calculate_weekly_trend(self, memories, key):
+        """Calculate weekly trend for the last 7 days"""
+        weekly_trend = []
+        today = datetime.now(timezone.utc).date()
+
+        for i in range(7):
+            date = today - timedelta(days=i)
+            day_memories = [m for m in memories if m.created_at.date() == date]
+
+            if day_memories:
+                # Calculate most common mood for the day
+                mood_counts = {}
+                for memory in day_memories:
+                    if memory.mood_emoji:
+                        mood_counts[memory.mood_emoji] = mood_counts.get(memory.mood_emoji, 0) + 1
+
+                most_common_mood = max(mood_counts.items(), key=lambda x: x[1])[0] if mood_counts else "No mood"
+
+                weekly_trend.append(
+                    {"date": date.strftime("%Y-%m-%d"), "mood": most_common_mood, "entry_count": len(day_memories)},
+                )
+            else:
+                weekly_trend.append({"date": date.strftime("%Y-%m-%d"), "mood": "No entries", "entry_count": 0})
+
+        return list(reversed(weekly_trend))  # Return in chronological order
+
+    def _calculate_monthly_insights(self, memories, key):
+        """Calculate monthly insights"""
+        if not memories:
+            return {
+                "most_productive_day": "No data",
+                "most_common_mood": "No data",
+                "total_words_written": 0,
+                "average_entries_per_day": 0,
+            }
+
+        # Calculate most productive day
+        day_counts = {}
+        for memory in memories:
+            day_name = memory.created_at.strftime("%A")
+            day_counts[day_name] = day_counts.get(day_name, 0) + 1
+
+        most_productive_day = max(day_counts.items(), key=lambda x: x[1])[0] if day_counts else "No data"
+
+        # Calculate most common mood
+        mood_counts = {}
+        for memory in memories:
+            if memory.mood_emoji:
+                mood_counts[memory.mood_emoji] = mood_counts.get(memory.mood_emoji, 0) + 1
+
+        most_common_mood = max(mood_counts.items(), key=lambda x: x[1])[0] if mood_counts else "No data"
+
+        # Calculate total words written
+        total_words = 0
+        for memory in memories:
+            try:
+                content = memory._decrypt(memory.encrypted_content, key)
+                if content:
+                    total_words += len(content.split())
+            except Exception:
+                continue
+
+        # Calculate average entries per day
+        if memories:
+            first_memory_date = min(memory.created_at.date() for memory in memories)
+            last_memory_date = max(memory.created_at.date() for memory in memories)
+            days_span = (last_memory_date - first_memory_date).days + 1
+            average_entries_per_day = len(memories) / days_span if days_span > 0 else 0
+        else:
+            average_entries_per_day = 0
+
+        return {
+            "most_productive_day": most_productive_day,
+            "most_common_mood": most_common_mood,
+            "total_words_written": total_words,
+            "average_entries_per_day": round(average_entries_per_day, 1),
+        }
+
+
 # Register the class-based views
 memory_bp.add_url_rule("/", view_func=MemoryListAPI.as_view("memory_list"))
 memory_bp.add_url_rule("/<int:memory_id>", view_func=MemoryDetailAPI.as_view("memory_detail"))
@@ -347,3 +577,4 @@ memory_bp.add_url_rule("/tags", view_func=MemoryTagListAPI.as_view("memory_tag_l
 memory_bp.add_url_rule("/<int:memory_id>/bookmark", view_func=MemoryBookmarkAPI.as_view("memory_bookmark"))
 memory_bp.add_url_rule("/moods", view_func=MemoryMoodListAPI.as_view("memory_mood_list"))
 memory_bp.add_url_rule("/chats/<string:chat_id>", view_func=MemoryChatListAPI.as_view("memory_chat_detail"))
+memory_bp.add_url_rule("/trends", view_func=MemoryTrendAPI.as_view("memory_trends"))
