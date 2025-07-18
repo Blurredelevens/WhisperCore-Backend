@@ -32,12 +32,16 @@ class User(db.Model):
     weekly_summary_enabled = db.Column(db.Boolean, default=True)
     monthly_summary_enabled = db.Column(db.Boolean, default=True)
 
+    # Notification settings
+    notifications_enabled = db.Column(db.Boolean, default=True)
+
     # AI Confidant preferences
     tone = db.Column(
         db.String(50),
         default="empathetic",
         nullable=True,
     )  # empathetic, supportive, analytical, casual, professional
+    chatbot_name = db.Column(db.String(50), default="WhisperCore", nullable=True)
 
     # Security
     failed_login_attempts = db.Column(db.Integer, default=0, nullable=False)
@@ -139,7 +143,9 @@ class User(db.Model):
             "is_admin": self.is_admin,
             "weekly_summary_enabled": self.weekly_summary_enabled,
             "monthly_summary_enabled": self.monthly_summary_enabled,
+            "notifications_enabled": self.notifications_enabled,
             "tone": self.tone,
+            "chatbot_name": self.chatbot_name,
         }
 
         if include_sensitive:

@@ -103,6 +103,8 @@ class Config(ABC):
             "SQLALCHEMY_DATABASE_URI": self.DATABASE_URL,
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "CORS_ORIGINS": self.CORS_ORIGINS,
+            "CORS_METHODS": self.CORS_METHODS,
+            "CORS_HEADERS": self.CORS_HEADERS,
             "DEBUG": self.DEBUG,
             "REDIS_URL": self.REDIS_URL,
             "MEMORY_MAX_LENGTH": self.MEMORY_MAX_LENGTH,
@@ -128,6 +130,10 @@ class Config(ABC):
                 "send_daily_prompt": {
                     "task": "tasks.scheduled.send_daily_prompt",
                     "schedule": 86400.0,  # 24 hours (daily)
+                },
+                "check_inactive_users": {
+                    "task": "tasks.notification_service.check_inactive_users_and_create_reminders",
+                    "schedule": 604800.0,  # 7 days (weekly)
                 },
             },
         }
@@ -172,7 +178,31 @@ class EnvConfig(Config):
 
     @property
     def CORS_ORIGINS(self) -> list:
-        return self._env.list("CORS_ORIGINS")
+        cors_origins = self._env.str("CORS_ORIGINS", "http://localhost:3000")
+        # Split by comma and strip whitespace
+        return [origin.strip() for origin in cors_origins.split(",") if origin.strip()]
+
+    @property
+    def CORS_METHODS(self) -> list:
+        cors_methods = self._env.str("CORS_METHODS", '["GET", "POST", "PUT", "DELETE", "OPTIONS"]')
+        # Parse the JSON-like string
+        import json
+
+        try:
+            return json.loads(cors_methods)
+        except (json.JSONDecodeError, ValueError):
+            return ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+
+    @property
+    def CORS_HEADERS(self) -> list:
+        cors_headers = self._env.str("CORS_HEADERS", '["Content-Type", "Authorization"]')
+        # Parse the JSON-like string
+        import json
+
+        try:
+            return json.loads(cors_headers)
+        except (json.JSONDecodeError, ValueError):
+            return ["Content-Type", "Authorization"]
 
     @property
     def DEBUG(self) -> bool:
@@ -193,6 +223,13 @@ class EnvConfig(Config):
     @property
     def DAILY_PROMPT_SCHEDULE(self) -> Dict[str, Any]:
         return {"task": "tasks.scheduled.send_daily_prompt", "schedule": 86400.0}  # 24 hours (daily)
+
+    @property
+    def CHECK_INACTIVE_USERS_SCHEDULE(self) -> Dict[str, Any]:
+        return {
+            "task": "tasks.notification_service.check_inactive_users_and_create_reminders",
+            "schedule": 604800.0,
+        }  # 7 days (weekly)
 
     @property
     def CELERY_BROKER_URL(self) -> str:
@@ -278,6 +315,13 @@ class AppConfig(Config):
     @property
     def DAILY_PROMPT_SCHEDULE(self) -> Dict[str, Any]:
         return {"task": "tasks.scheduled.send_daily_prompt", "schedule": 86400.0}  # 24 hours (daily)
+
+    @property
+    def CHECK_INACTIVE_USERS_SCHEDULE(self) -> Dict[str, Any]:
+        return {
+            "task": "tasks.notification_service.check_inactive_users_and_create_reminders",
+            "schedule": 120.0,
+        }  # 7 days (weekly)
 
     @property
     def CELERY_BROKER_URL(self) -> str:

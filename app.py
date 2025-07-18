@@ -74,15 +74,19 @@ def create_app(config_class=EnvConfig):
     from routes.auth import auth_bp
     from routes.memory import memory_bp
     from routes.memory_weighting import memory_weighting_bp
+    from routes.notification import notification_bp
     from routes.prompt import prompt_bp
     from routes.reflection import reflection_bp
+    from routes.settings import settings_bp
     from routes.summary import summary_bp
     from routes.task import task_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(memory_bp, url_prefix="/api/memories")
     app.register_blueprint(memory_weighting_bp, url_prefix="/api/memory-weighting")
+    app.register_blueprint(notification_bp, url_prefix="/api/notifications")
     app.register_blueprint(reflection_bp, url_prefix="/api/reflections")
+    app.register_blueprint(settings_bp, url_prefix="/api/settings")
     app.register_blueprint(task_bp, url_prefix="/api/task")
     app.register_blueprint(summary_bp, url_prefix="/api/summary")
     app.register_blueprint(prompt_bp, url_prefix="/api/prompts")

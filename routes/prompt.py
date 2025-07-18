@@ -13,7 +13,14 @@ class PromptListAPI(MethodView):
     decorators = [jwt_required()]
 
     def get(self):
-        prompts = Prompt.get_all()
+        user_id = get_jwt_identity()
+        user = db.session.get(User, user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        prompts = Prompt.get_latest_prompts(user_id)
+        if not prompts:
+            return jsonify({"error": "No prompts found"}), 404
         return jsonify([p.to_dict() for p in prompts]), 200
 
     def post(self):
@@ -88,6 +95,6 @@ class TodayPromptAPI(MethodView):
 
 
 # Register endpoints
-prompt_bp.add_url_rule("/", view_func=PromptListAPI.as_view("prompt_list"))
+prompt_bp.add_url_rule("", view_func=PromptListAPI.as_view("prompt_list"))
 prompt_bp.add_url_rule("/<int:prompt_id>", view_func=PromptDetailAPI.as_view("prompt_detail"))
 prompt_bp.add_url_rule("/today", view_func=TodayPromptAPI.as_view("today_prompt"))

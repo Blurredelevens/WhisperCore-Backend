@@ -75,6 +75,16 @@ class Prompt(db.Model):
         )
 
     @staticmethod
+    def get_latest_prompts(user_id):
+        """Get latest prompts for a user."""
+        return (
+            Prompt.query.filter_by(user_id=user_id, is_active=True)
+            .order_by(Prompt.created_at.desc(), Prompt.id.desc())
+            .limit(5)
+            .all()
+        )
+
+    @staticmethod
     def create_daily_prompt(user_id, prompt_text):
         # TOOD: Change this to use llm
         """Create a new daily prompt for a user."""
