@@ -66,6 +66,86 @@ class User(db.Model):
     # Admin
     is_admin = db.Column(db.Boolean, default=False)
 
+    @classmethod
+    def get_available_tones(cls):
+        """Get list of available AI tones with descriptions."""
+        return [
+            {
+                "value": "empathetic",
+                "label": "Empathetic",
+                "description": (
+                    "Warm, understanding, and emotionally supportive responses "
+                    "that show genuine care and compassion."
+                ),
+            },
+            {
+                "value": "supportive",
+                "label": "Supportive",
+                "description": (
+                    "Encouraging and uplifting responses that provide positive " "reinforcement and motivation."
+                ),
+            },
+            {
+                "value": "analytical",
+                "label": "Analytical",
+                "description": ("Thoughtful, logical responses that help analyze situations " "and provide insights."),
+            },
+            {
+                "value": "casual",
+                "label": "Casual",
+                "description": "Relaxed, friendly responses that feel like talking to a close friend.",
+            },
+            {
+                "value": "professional",
+                "label": "Professional",
+                "description": ("Formal, structured responses that maintain a business-like tone."),
+            },
+        ]
+
+    @classmethod
+    def get_valid_tone_values(cls):
+        """Get list of valid tone values only."""
+        return [tone["value"] for tone in cls.get_available_tones()]
+
+    @classmethod
+    def get_ai_tones(cls, user_id):
+        """Get distinct tones that users have actually selected from the database."""
+        from extensions import db
+
+        # Query to get distinct tones from user table
+        distinct_tones = (
+            db.session.query(cls.tone).filter(cls.tone.isnot(None), cls.tone != "", cls.id == user_id).distinct().all()
+        )
+
+        # Extract tone values from query result
+        tone_values = [tone[0] for tone in distinct_tones if tone[0]]
+
+        # If no tones found in database, return default tones
+        if not tone_values:
+            return cls.get_available_tones()
+
+        # Create tone objects with descriptions
+        tone_descriptions = {
+            "empathetic": "Warm, understanding, and emotionally supportive "
+            "responses that show genuine care and compassion.",
+            "supportive": "Encouraging and uplifting responses that provide positive reinforcement and motivation.",
+            "analytical": "Thoughtful, logical responses that help analyze situations and provide insights.",
+            "casual": "Relaxed, friendly responses that feel like talking to a close friend.",
+            "professional": "Formal, structured responses that maintain a business-like tone.",
+        }
+
+        tones = []
+        for tone_value in tone_values:
+            tones.append(
+                {
+                    "value": tone_value,
+                    "label": tone_value.title(),
+                    "description": tone_descriptions.get(tone_value, f"{tone_value.title()} tone for AI responses."),
+                },
+            )
+
+        return tones
+
     def __repr__(self):
         return f"<User {self.email}>"
 

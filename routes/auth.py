@@ -328,11 +328,9 @@ class ProfileAPI(MethodView):
         if data.bio is not None:
             user.bio = data.bio
         if data.tone is not None:
-            # Validate tone
-            valid_tones = ["empathetic", "supportive", "analytical", "casual", "professional"]
-            if data.tone not in valid_tones:
-                return jsonify({"error": f"Invalid tone. Must be one of: {', '.join(valid_tones)}"}), 400
-            user.tone = data.tone
+
+            if data.tone in User.get_ai_tones(user_id):
+                user.tone = data.tone
 
         user.updated_at = datetime.now(timezone.utc)
         db.session.commit()
