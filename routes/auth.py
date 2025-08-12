@@ -1,7 +1,7 @@
-import os
+import logging
 from datetime import datetime, timezone
 
-from flask import Blueprint, current_app, jsonify, request, send_file
+from flask import Blueprint, current_app, jsonify, request
 from flask.views import MethodView
 from flask_jwt_extended import (
     create_access_token,
@@ -11,7 +11,6 @@ from flask_jwt_extended import (
     get_jwt_identity,
     jwt_required,
 )
-from werkzeug.utils import secure_filename
 
 from extensions import db
 from models.memory import Memory
@@ -34,6 +33,9 @@ from schemas.auth import (
     UserDetailResponse,
     UserResponse,
 )
+from services.image_service import get_image_response, upload_image
+
+logger = logging.getLogger(__name__)
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -439,9 +441,9 @@ class DashboardAPI(MethodView):
 
         # Get mood statistics
         mood_stats = (
-            db.session.query(Memory.mood, db.func.count(Memory.id))
+            db.session.query(Memory.mood_emoji, db.func.count(Memory.id))
             .filter_by(user_id=user_id)
-            .group_by(Memory.mood)
+            .group_by(Memory.mood_emoji)
             .all()
         )
         mood_stats = {k: v for k, v in mood_stats if k is not None}
@@ -502,16 +504,24 @@ class UserImageUploadAPI(MethodView):
         if image.filename == "":
             return jsonify({"error": "No image selected"}), 400
 
-        filename = secure_filename(image.filename)
-        upload_folder = os.path.join(current_app.root_path, "uploads")
-        os.makedirs(upload_folder, exist_ok=True)
-        file_path = os.path.join(upload_folder, filename)
-        image.save(file_path)
+        try:
+            _, file_path = upload_image(image, folder="users", user_id=user_id)
 
-        user.image_path = file_path
-        db.session.commit()
+            user.image_path = file_path
+            db.session.commit()
 
-        return jsonify({"message": "Image uploaded successfully", "image_path": file_path, "user_id": user_id}), 200
+            logger.info(f"User {user_id} profile image uploaded: {file_path}")
+            return (
+                jsonify(
+                    {"message": "Profile Image uploaded successfully", "image_path": file_path, "user_id": user_id},
+                ),
+                200,
+            )
+
+        except Exception as e:
+            logger.error(f"Error uploading user image: {e}")
+            db.session.rollback()
+            return jsonify({"error": f"Failed to upload image: {str(e)}"}), 500
 
 
 class UserImageDownloadAPI(MethodView):
@@ -534,10 +544,7 @@ class UserImageDownloadAPI(MethodView):
         if not user:
             return jsonify({"error": "User not found"}), 404
 
-        if not user.image_path:
-            return jsonify({"error": "No image found for this user"}), 404
-
-        return send_file(user.image_path, mimetype="image/jpeg")
+        return get_image_response(user.image_path)
 
 
 # Register the class-based views

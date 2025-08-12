@@ -36,7 +36,6 @@ class MemoryFactory(factory.alchemy.SQLAlchemyModelFactory):
 
     user_id = factory.SubFactory(UserFactory).id
     chat_id = factory.Faker("uuid4")
-    mood = factory.Iterator(["happy", "sad", "neutral", "excited"])
     mood_emoji = factory.Iterator(["😊", "😢", "😐", "🎉"])
     tags = factory.Faker("words", nb=3)
     is_bookmarked = False
@@ -90,7 +89,6 @@ class MemoryRequestFactory(factory.Factory):
     content = factory.Faker("paragraph")
     model_response = factory.Faker("sentence")
     chat_id = factory.Faker("uuid4")
-    mood = factory.Iterator(["happy", "sad", "neutral", "excited"])
     mood_emoji = factory.Iterator(["😊", "😢", "😐", "🎉"])
     tags = factory.LazyFunction(lambda: ["tag1", "tag2", "tag3"])
 
@@ -101,7 +99,6 @@ class MemoryUpdateRequestFactory(factory.Factory):
 
     content = factory.Faker("paragraph")
     chat_id = factory.Faker("uuid4")
-    mood = factory.Iterator(["happy", "sad", "neutral", "excited"])
     mood_emoji = factory.Iterator(["😊", "😢", "😐", "🎉"])
     tags = factory.LazyFunction(lambda: ["updated_tag1", "updated_tag2"])
 
@@ -149,7 +146,6 @@ class MemoryQueryFactory(factory.Factory):
         model = dict
 
     search = factory.Faker("word")
-    mood = factory.Iterator(["happy", "sad", "neutral", "excited"])
     mood_emoji = factory.Iterator(["😊", "😢", "😐", "🎉"])
     tag = factory.Faker("word")
     chat_id = factory.Faker("uuid4")

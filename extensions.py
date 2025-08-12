@@ -13,7 +13,7 @@ jwt = JWTManager()
 redis_client = FlaskRedis()
 
 # Initialize Celery (basic initialization only)
-celery = Celery("whisper_core", include=["tasks.scheduled"])
+celery = Celery("whisper_core", include=["tasks.scheduled", "tasks.notification_service"])
 
 
 def init_extensions(app):

@@ -1,14 +1,16 @@
-import os
+import re
 from datetime import datetime, timedelta, timezone
 
-from flask import Blueprint, current_app, jsonify, request, send_file
+from flask import Blueprint, jsonify, request
 from flask.views import MethodView
 from flask_jwt_extended import get_jwt_identity, jwt_required
-from werkzeug.utils import secure_filename
+from sqlalchemy import func
 
 from extensions import db
 from models.memory import Memory
+from models.memory_image import MemoryImage
 from models.user import User
+from services.image_service import get_image_response, upload_image
 
 memory_bp = Blueprint("memory", __name__)
 
@@ -24,12 +26,11 @@ class MemoryListAPI(MethodView):
         # Get query parameters
         bookmarked = request.args.get("bookmarked", "false").lower() == "true"
         search_query = request.args.get("search", "")
-        mood = request.args.get("mood")
         mood_emoji = request.args.get("mood_emoji")
         tag = request.args.get("tag")
-        chat_id = request.args.get("chat_id")
         memory_weight = request.args.get("memory_weight")
         group_by_chat_id = request.args.get("group_by_chat_id", "false").lower() == "true"
+        has_images = request.args.get("has_images")
 
         # Pagination parameters
         page = request.args.get("page", 1, type=int)
@@ -37,25 +38,29 @@ class MemoryListAPI(MethodView):
 
         # Start with base query
         query = Memory.query.filter_by(user_id=user_id)
-
         # Apply filters
         if bookmarked:
             query = query.filter_by(is_bookmarked=True)
 
-        if mood:
-            query = query.filter_by(mood=mood)
-
         if mood_emoji:
-            query = query.filter_by(mood_emoji=mood_emoji)
+            query = query.filter(func.upper(Memory.mood_emoji) == mood_emoji.upper())
 
         if tag:
-            query = query.filter(Memory.tags.ilike(f"%{tag}%"))
-
-        if chat_id:
-            query = query.filter_by(chat_id=chat_id)
+            query = query.filter(func.upper(Memory.tags) == tag.upper())
 
         if memory_weight:
             query = query.filter_by(memory_weight=memory_weight)
+
+        # Filter by images
+        if has_images is not None:
+            has_images_bool = has_images.lower() == "true"
+            if has_images_bool:
+                # Get memories that have images
+
+                query = query.filter(func.trim(func.lower(MemoryImage.image_path)) != "")
+            else:
+                # Get memories that don't have images
+                query = query.outerjoin(Memory.images).filter(Memory.images.is_(None))
 
         # Handle search query - get all memories and filter in Python since content is encrypted
         if search_query:
@@ -67,10 +72,16 @@ class MemoryListAPI(MethodView):
             for memory in all_memories:
                 try:
                     content = memory._decrypt(memory.encrypted_content, key)
-                    if content and search_query.lower() in content.lower():
+                    model_response = memory._decrypt(memory.model_response, key)
+                    normalized_content = re.sub(r"\s+", " ", content).strip() if content else ""
+                    normalized_model_response = re.sub(r"\s+", " ", model_response).strip() if model_response else ""
+                    if (
+                        search_query.lower() in normalized_content.lower()
+                        or search_query.lower() in normalized_model_response.lower()
+                    ):
                         filtered_memories.append(memory)
-                except Exception:
-                    # Skip memories with decryption errors
+                except Exception as e:
+                    print(f"Decryption error: {e}")
                     continue
 
             # Apply pagination to filtered results
@@ -99,8 +110,8 @@ class MemoryListAPI(MethodView):
 
         # Handle grouping by chat_id
         if group_by_chat_id:
-            # Get all memories for grouping (no pagination)
-            all_memories = query.order_by(Memory.created_at.desc()).all()
+            # Get all memories for grouping (no pagination) - already ordered by created_at desc
+            all_memories = query.order_by(Memory.chat_id.desc(), Memory.created_at.desc()).all()
 
             # Group memories by chat_id
             grouped_memories = {}
@@ -115,9 +126,10 @@ class MemoryListAPI(MethodView):
                 grouped_memories[chat_id_key]["memories"].append(memory.to_dict(key))
                 total_memories += 1
 
-            # Convert to list and sort by count descending
+            # Convert to list and sort by most recent memory creation date (newest first)
+            # Memories within each group are already ordered by created_at desc (newest first)
             grouped_list = list(grouped_memories.values())
-            grouped_list.sort(key=lambda x: x["count"], reverse=True)
+            grouped_list.sort(key=lambda x: x["memories"][0]["created_at"], reverse=True)
 
             return (
                 jsonify(
@@ -183,8 +195,7 @@ class MemoryListAPI(MethodView):
 
             memory = Memory(
                 user_id=user_id,
-                chat_id=data.get("chat_id"),  # Save chat_id if provided
-                mood=data.get("mood"),
+                chat_id=data.get("chat_id"),
                 mood_emoji=data.get("mood_emoji"),
                 tags=",".join(data.get("tags", [])),
             )
@@ -223,8 +234,6 @@ class MemoryDetailAPI(MethodView):
             memory.set_content(data["content"], key)
         if "chat_id" in data:
             memory.chat_id = data["chat_id"]
-        if "mood" in data:
-            memory.mood = data["mood"]
         if "mood_emoji" in data:
             memory.mood_emoji = data["mood_emoji"]
         if "tags" in data:
@@ -257,20 +266,28 @@ class MemoryImageUploadAPI(MethodView):
         if "image" not in request.files:
             return jsonify({"error": "No image part in request"}), 400
 
-        image = request.files["image"]
+        image = request.files.get("image")
         if image.filename == "":
             return jsonify({"error": "No image selected"}), 400
 
-        filename = secure_filename(image.filename)
-        upload_folder = os.path.join(current_app.root_path, "uploads")
-        os.makedirs(upload_folder, exist_ok=True)
-        file_path = os.path.join(upload_folder, filename)
-        image.save(file_path)
+        try:
+            # Upload image using the new MemoryImage model
+            _, image_path = upload_image(image, folder="memories", user_id=user_id, memory_id=memory_id)
 
-        memory.image_path = file_path
-        db.session.commit()
+            if image_path:
+                # Create MemoryImage record
+                memory_image = MemoryImage(memory_id=memory_id, user_id=user_id, image_path=image_path)
+                db.session.add(memory_image)
+                db.session.commit()
 
-        return jsonify({"message": "Image uploaded successfully", "image_path": file_path}), 200
+                return jsonify({"message": "Image uploaded successfully.", "image": memory_image.to_dict()}), 201
+            else:
+                return jsonify({"error": "Failed to upload image"}), 500
+
+        except Exception as e:
+            print(f"Error uploading memory image: {e}")
+            db.session.rollback()
+            return jsonify({"error": f"Failed to upload image: {str(e)}"}), 500
 
 
 class MemoryImageDownloadAPI(MethodView):
@@ -281,9 +298,14 @@ class MemoryImageDownloadAPI(MethodView):
         memory = Memory.query.filter_by(id=memory_id, user_id=user_id).first()
         if not memory:
             return jsonify({"error": "Memory not found"}), 404
-        if not memory.image_path:
+
+        # Get the first image for this memory (for backward compatibility)
+        memory_image = MemoryImage.query.filter_by(memory_id=memory_id, user_id=user_id).first()
+
+        if not memory_image or not memory_image.image_path:
             return jsonify({"error": "No image found for this memory"}), 404
-        return send_file(memory.image_path, mimetype="image/jpeg")
+
+        return get_image_response(memory_image.image_path)
 
 
 class MemoryTagListAPI(MethodView):
@@ -307,8 +329,9 @@ class MemoryMoodListAPI(MethodView):
         memories = Memory.query.filter_by(user_id=user_id).all()
         moods = set()
         for memory in memories:
-            if memory.mood:
-                moods.add(memory.mood)
+            if memory.mood_emoji:
+                normalized_mood = memory.mood_emoji.strip().upper()
+                moods.add(normalized_mood)
         return jsonify(list(moods))
 
 
@@ -432,36 +455,32 @@ class MemoryTrendAPI(MethodView):
         return streak
 
     def _calculate_mood_stats(self, memories):
-        """Calculate mood distribution and average mood"""
+        """Calculate mood distribution and average mood using memory_weight"""
         mood_counts = {}
         total_mood_entries = 0
+        total_weight = 0
 
-        # Count mood emojis
+        # Count mood emojis and sum memory_weight
         for memory in memories:
             if memory.mood_emoji:
-                mood_counts[memory.mood_emoji] = mood_counts.get(memory.mood_emoji, 0) + 1
+                # Normalize mood emoji to uppercase and trim whitespace for case-insensitive counting
+                normalized_mood = memory.mood_emoji.strip().upper()
+                mood_counts[normalized_mood] = mood_counts.get(normalized_mood, 0) + 1
                 total_mood_entries += 1
+                total_weight += memory.memory_weight or 0
 
-        # Define mood hierarchy for averaging
-        mood_hierarchy = {"😍": 10, "😊": 9, "😄": 8, "🙂": 7, "😐": 6, "😕": 5, "😟": 4, "😢": 3, "😭": 2, "😱": 1}
-
-        # Calculate average mood
+        # Calculate average mood using memory_weight
         if total_mood_entries > 0:
-            total_mood_value = 0
-            for mood_emoji, count in mood_counts.items():
-                mood_value = mood_hierarchy.get(mood_emoji, 5)  # Default to neutral
-                total_mood_value += mood_value * count
+            average_weight = total_weight / total_mood_entries
 
-            average_mood_value = total_mood_value / total_mood_entries
-
-            # Convert back to mood name
-            if average_mood_value >= 8:
+            # Map average_weight to mood name
+            if average_weight >= 8:
                 average_mood = "Happy"
-            elif average_mood_value >= 6:
+            elif average_weight >= 6:
                 average_mood = "Good"
-            elif average_mood_value >= 4:
+            elif average_weight >= 4:
                 average_mood = "Okay"
-            elif average_mood_value >= 2:
+            elif average_weight >= 2:
                 average_mood = "Down"
             else:
                 average_mood = "Bad"
@@ -471,7 +490,7 @@ class MemoryTrendAPI(MethodView):
         return mood_counts, average_mood
 
     def _calculate_top_categories(self, memories):
-        """Calculate top categories based on tags"""
+        """Return top 5 tags as list of single-key dicts: [{'TAG': count}, ...]"""
         tag_counts = {}
 
         for memory in memories:
@@ -480,11 +499,15 @@ class MemoryTrendAPI(MethodView):
                 for tag in tags:
                     tag = tag.strip()
                     if tag:
-                        tag_counts[tag] = tag_counts.get(tag, 0) + 1
+                        tag_upper = tag.upper()
+                        tag_counts[tag_upper] = tag_counts.get(tag_upper, 0) + 1
 
-        # Sort by count and return top 5
+        # Sort by count descending and take top 5
         sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
-        return [tag for tag, count in sorted_tags[:5]]
+        top_5 = sorted_tags[:5]
+
+        # Convert to desired format
+        return [{tag: count} for tag, count in top_5]
 
     def _calculate_weekly_trend(self, memories, key):
         """Calculate weekly trend for the last 7 days"""
@@ -495,22 +518,34 @@ class MemoryTrendAPI(MethodView):
             date = today - timedelta(days=i)
             day_memories = [m for m in memories if m.created_at.date() == date]
 
-            if day_memories:
-                # Calculate most common mood for the day
-                mood_counts = {}
-                for memory in day_memories:
-                    if memory.mood_emoji:
-                        mood_counts[memory.mood_emoji] = mood_counts.get(memory.mood_emoji, 0) + 1
+            # Skip if there are no memories for the day
+            if not day_memories:
+                continue
 
-                most_common_mood = max(mood_counts.items(), key=lambda x: x[1])[0] if mood_counts else "No mood"
+            # Calculate mood counts
+            mood_counts = {}
+            for memory in day_memories:
+                mood = memory.mood_emoji
+                if mood and mood.strip():
+                    mood_upper = mood.strip().upper()
+                    mood_counts[mood_upper] = mood_counts.get(mood_upper, 0) + 1
 
-                weekly_trend.append(
-                    {"date": date.strftime("%Y-%m-%d"), "mood": most_common_mood, "entry_count": len(day_memories)},
-                )
-            else:
-                weekly_trend.append({"date": date.strftime("%Y-%m-%d"), "mood": "No entries", "entry_count": 0})
+            # Skip this day if no valid mood is found
+            if not mood_counts:
+                continue
 
-        return list(reversed(weekly_trend))  # Return in chronological order
+            # Determine most common mood
+            most_common_mood = max(mood_counts.items(), key=lambda x: x[1])[0]
+
+            weekly_trend.append(
+                {
+                    "date": date.strftime("%Y-%m-%d"),
+                    "mood": most_common_mood,
+                    "entry_count": len(day_memories),
+                },
+            )
+
+        return list(reversed(weekly_trend))
 
     def _calculate_monthly_insights(self, memories, key):
         """Calculate monthly insights"""
@@ -534,7 +569,8 @@ class MemoryTrendAPI(MethodView):
         mood_counts = {}
         for memory in memories:
             if memory.mood_emoji:
-                mood_counts[memory.mood_emoji] = mood_counts.get(memory.mood_emoji, 0) + 1
+                normalized_mood = memory.mood_emoji.strip().upper()
+                mood_counts[normalized_mood] = mood_counts.get(normalized_mood, 0) + 1
 
         most_common_mood = max(mood_counts.items(), key=lambda x: x[1])[0] if mood_counts else "No data"
 

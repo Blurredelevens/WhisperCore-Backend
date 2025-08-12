@@ -255,6 +255,26 @@ class EnvConfig(Config):
     def LLM_API_URL(self) -> str:
         return self._env.str("LLM_API_URL", "http://localhost:8000")
 
+    @property
+    def DEFAULT_LLM_MODEL(self) -> str:
+        return self._env.str("DEFAULT_LLM_MODEL", "llama3:8b")
+
+    @property
+    def AWS_ACCESS_KEY_ID(self) -> str:
+        return self._env.str("AWS_ACCESS_KEY_ID")
+
+    @property
+    def AWS_SECRET_ACCESS_KEY(self) -> str:
+        return self._env.str("AWS_SECRET_ACCESS_KEY")
+
+    @property
+    def AWS_REGION(self) -> str:
+        return self._env.str("AWS_REGION", "us-east-1")
+
+    @property
+    def S3_BUCKET_NAME(self) -> str:
+        return self._env.str("S3_BUCKET_NAME")
+
 
 class AppConfig(Config):
     def __init__(self, current_app):
@@ -299,6 +319,22 @@ class AppConfig(Config):
     @property
     def DEBUG(self) -> bool:
         return self._config.get("DEBUG", False)
+
+    @property
+    def AWS_ACCESS_KEY_ID(self) -> str:
+        return self._config.get("AWS_ACCESS_KEY_ID")
+
+    @property
+    def AWS_SECRET_ACCESS_KEY(self) -> str:
+        return self._config.get("AWS_SECRET_ACCESS_KEY")
+
+    @property
+    def AWS_REGION(self) -> str:
+        return self._config.get("AWS_REGION", "us-east-1")
+
+    @property
+    def S3_BUCKET_NAME(self) -> str:
+        return self._config.get("S3_BUCKET_NAME")
 
     @property
     def BEAT_SCHEDULE(self) -> int:

@@ -56,10 +56,8 @@ class ExportService:
                             "id": memory.id,
                             "error": f"Failed to decrypt memory: {str(e)}",
                             "created_at": memory.created_at.isoformat() if memory.created_at else None,
-                            "mood": memory.mood,
                             "tags": memory.tags.split(",") if memory.tags else [],
                             "mood_emoji": memory.mood_emoji,
-                            "mood_value": memory.mood_value,
                             "is_bookmarked": memory.is_bookmarked,
                             "memory_weight": memory.memory_weight,
                         },
@@ -117,15 +115,6 @@ class ExportService:
                 lines.append(
                     f"Date: {memory.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') if memory.created_at else 'Unknown'}",
                 )
-
-                # Mood info
-                if memory.mood:
-                    mood_line = f"Mood: {memory.mood}"
-                    if memory.mood_emoji:
-                        mood_line += f" {memory.mood_emoji}"
-                    if memory.mood_value is not None:
-                        mood_line += f" (Value: {memory.mood_value})"
-                    lines.append(mood_line)
 
                 # Tags
                 if memory.tags:

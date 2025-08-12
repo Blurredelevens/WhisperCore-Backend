@@ -26,3 +26,4 @@ environs==14.1.1
 requests==2.31.0
 sqlalchemy==2.0.17
 python-dateutil==2.9.0.post0
+boto3==1.34.0

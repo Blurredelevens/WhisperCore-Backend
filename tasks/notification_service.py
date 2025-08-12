@@ -1,11 +1,14 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
+from celery import shared_task
+
 from models import Memory, Notification, User
 
 logger = logging.getLogger(__name__)
 
 
+@shared_task(name="tasks.notification_service.check_inactive_users_and_create_reminders")
 def check_inactive_users_and_create_reminders():
     """Check for inactive users and create weekly check-in reminders."""
     try:

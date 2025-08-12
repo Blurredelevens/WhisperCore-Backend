@@ -1,5 +1,4 @@
 import json
-from unittest.mock import Mock, patch
 
 from models.memory import Memory
 
@@ -7,14 +6,8 @@ from models.memory import Memory
 class TestTaskAPI:
     """Test cases for task API."""
 
-    @patch("routes.task.celery.send_task")
-    def test_create_task_with_chat_id_and_mood_emoji(self, mock_send_task, client, db_session, auth_headers, user):
+    def test_create_task_with_chat_id_and_mood_emoji(self, client, db_session, auth_headers, user):
         """Test creating a task with chat_id and mood_emoji."""
-        # Mock the Celery task
-        mock_task = Mock()
-        mock_task.id = "test-task-id-123"
-        mock_send_task.return_value = mock_task
-
         data = {"content": "Test task content", "chat_id": "test_chat_123", "mood_emoji": "😊"}
 
         response = client.post(
@@ -24,11 +17,11 @@ class TestTaskAPI:
             headers=auth_headers,
         )
 
-        assert response.status_code == 202  # Accepted for async processing
+        assert response.status_code == 200  # Synchronous processing
         result = json.loads(response.data)
-        assert result["message"] == "Task started successfully"
-        assert result["status"] == "processing"
-        assert "task_id" in result
+        assert result["message"] == "Task completed successfully"
+        assert result["status"] == "completed"
+        assert "memory_id" in result
 
         # Verify memory was created with correct chat_id and mood_emoji
         # Get the most recent memory for this user
@@ -37,14 +30,8 @@ class TestTaskAPI:
         assert memory.chat_id == "test_chat_123"
         assert memory.mood_emoji == "😊"
 
-    @patch("routes.task.celery.send_task")
-    def test_create_task_without_chat_id_and_mood_emoji(self, mock_send_task, client, db_session, auth_headers, user):
+    def test_create_task_without_chat_id_and_mood_emoji(self, client, db_session, auth_headers, user):
         """Test creating a task without chat_id and mood_emoji."""
-        # Mock the Celery task
-        mock_task = Mock()
-        mock_task.id = "test-task-id-456"
-        mock_send_task.return_value = mock_task
-
         data = {"content": "Test task content without chat_id"}
 
         response = client.post(
@@ -54,11 +41,11 @@ class TestTaskAPI:
             headers=auth_headers,
         )
 
-        assert response.status_code == 202  # Accepted for async processing
+        assert response.status_code == 200  # Synchronous processing
         result = json.loads(response.data)
-        assert result["message"] == "Task started successfully"
-        assert result["status"] == "processing"
-        assert "task_id" in result
+        assert result["message"] == "Task completed successfully"
+        assert result["status"] == "completed"
+        assert "memory_id" in result
 
         # Verify memory was created without chat_id and mood_emoji
         # Get the most recent memory for this user

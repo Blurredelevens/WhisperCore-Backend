@@ -9,7 +9,7 @@ class TestPromptListAPI:
     """Test cases for prompt list API."""
 
     def test_get_prompts_success(self, client, db_session, auth_headers, user):
-        """Test successful retrieval of all prompts."""
+        """Test successful retrieval of all prompts (only active prompts are returned)."""
         # Create some test prompts
         prompt1 = Prompt(user_id=user.id, text="Test prompt 1", is_active=True)
         prompt2 = Prompt(user_id=user.id, text="Test prompt 2", is_active=False)
@@ -17,17 +17,18 @@ class TestPromptListAPI:
         db_session.add(prompt2)
         db_session.commit()
 
-        response = client.get("/api/prompts/", headers=auth_headers)
+        response = client.get("/api/prompts", headers=auth_headers)
 
         assert response.status_code == 200
         result = json.loads(response.data)
-        assert len(result) == 2
-        assert any(p["text"] == "Test prompt 1" for p in result)
-        assert any(p["text"] == "Test prompt 2" for p in result)
+        # Only active prompts should be returned
+        assert len(result) == 1
+        assert result[0]["text"] == "Test prompt 1"
+        assert result[0]["is_active"] is True
 
     def test_get_prompts_no_auth(self, client, db_session):
         """Test getting prompts without authentication."""
-        response = client.get("/api/prompts/")
+        response = client.get("/api/prompts")
         assert response.status_code == 401
 
     def test_create_prompt_admin_success(self, client, db_session, admin_auth_headers, admin_user):
@@ -35,7 +36,7 @@ class TestPromptListAPI:
         data = {"text": "New admin prompt", "is_active": True}
 
         response = client.post(
-            "/api/prompts/",
+            "/api/prompts",
             data=json.dumps(data),
             content_type="application/json",
             headers=admin_auth_headers,
@@ -52,7 +53,7 @@ class TestPromptListAPI:
         data = {"text": "New prompt", "is_active": True}
 
         response = client.post(
-            "/api/prompts/",
+            "/api/prompts",
             data=json.dumps(data),
             content_type="application/json",
             headers=auth_headers,
@@ -65,7 +66,7 @@ class TestPromptListAPI:
     def test_create_prompt_no_data(self, client, db_session, admin_auth_headers):
         """Test prompt creation with no data."""
         response = client.post(
-            "/api/prompts/",
+            "/api/prompts",
             data=json.dumps({}),
             content_type="application/json",
             headers=admin_auth_headers,
@@ -114,6 +115,8 @@ class TestPromptDetailAPI:
             content_type="application/json",
             headers=admin_auth_headers,
         )
+
+        print("response data:  ", response.data)
 
         assert response.status_code == 200
         result = json.loads(response.data)

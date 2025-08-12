@@ -10,6 +10,7 @@ class LLMGenerateRequest(BaseModel):
     model: str = Field(..., description="Model name to use for generation")
     prompt: str = Field(..., description="Input prompt for text generation")
     stream: bool = Field(default=False, description="Whether to stream the response")
+    images: Optional[List[str]] = Field(None, description="Optional list of base64 encoded images for vision models")
 
 
 class LLMGenerateResponse(BaseModel):

@@ -120,11 +120,23 @@ class PromptService:
 
     def create_daily_prompt_for_user(self, user_id: int, prompt_text: str) -> Prompt:
         """Create a daily prompt for a specific user"""
-        return Prompt.create_daily_prompt(user_id, prompt_text)
+        try:
+            prompt = Prompt.create_daily_prompt(user_id, prompt_text)
+            logger.info(f"Successfully created daily prompt for user {user_id}")
+            return prompt
+        except Exception as e:
+            logger.error(f"Error creating daily prompt for user {user_id}: {e}")
+            raise
 
     def create_personalized_prompt_for_user(self, user_id: int, prompt_text: str) -> Prompt:
         """Create a personalized prompt for a specific user (allows multiple per day)"""
-        return Prompt.create_personalized_prompt(user_id, prompt_text)
+        try:
+            personalized_prompt = Prompt.create_personalized_prompt(user_id, prompt_text)
+            logger.info(f"Successfully created personalized prompt for user {user_id}")
+            return personalized_prompt
+        except Exception as e:
+            logger.error(f"Error creating personalized prompt for user {user_id}: {e}")
+            raise
 
     def create_daily_prompts_for_all_users(self) -> dict:
         """Create personalized daily prompts for all active users using LLM"""

@@ -8,10 +8,9 @@ from .base import BaseResponse, TimestampMixin
 class MemoryBase(BaseModel):
     content: constr(min_length=1)
     chat_id: Optional[str] = None
-    mood: Optional[str] = None
     mood_emoji: Optional[str] = None
-    mood_value: Optional[int] = None
     tags: Optional[List[str]] = []
+    memory_weight: Optional[int] = None
 
 
 class MemoryCreate(MemoryBase):
@@ -21,9 +20,7 @@ class MemoryCreate(MemoryBase):
 class MemoryUpdate(BaseModel):
     content: Optional[constr(min_length=1)] = None
     chat_id: Optional[str] = None
-    mood: Optional[str] = None
     mood_emoji: Optional[str] = None
-    mood_value: Optional[int] = None
     tags: Optional[List[str]] = None
 
 

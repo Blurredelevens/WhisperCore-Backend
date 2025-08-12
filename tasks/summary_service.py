@@ -148,16 +148,22 @@ class SummaryService:
         end_date: datetime,
     ) -> Reflection:
         """Save reflection to database"""
-        reflection = Reflection(
-            user_id=user_id,
-            content=content,
-            reflection_type=reflection_type,
-            period_start=start_date,
-            period_end=end_date,
-        )
-        db.session.add(reflection)
-        db.session.commit()
-        return reflection
+        try:
+            reflection = Reflection(
+                user_id=user_id,
+                content=content,
+                reflection_type=reflection_type,
+                period_start=start_date,
+                period_end=end_date,
+            )
+            db.session.add(reflection)
+            db.session.commit()
+            logger.info(f"Successfully saved {reflection_type} reflection for user {user_id}")
+            return reflection
+        except Exception as e:
+            logger.error(f"Error saving {reflection_type} reflection for user {user_id}: {e}")
+            db.session.rollback()
+            raise
 
     def get_users_by_summary_type(self, summary_type: str) -> list:
         """Get users who have a specific summary type enabled"""

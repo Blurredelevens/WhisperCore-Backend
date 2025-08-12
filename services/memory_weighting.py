@@ -19,7 +19,7 @@ class MemoryWeightingService:
             # Use the new single call method that generates both reflection and weight
             reflection, weight = self.llm_client.generate_reflection_and_weight(
                 memory_content=memory_content,
-                tone=tone,  # Use the provided tone
+                tone=tone,
                 model="llama3:8b",
                 max_retries=3,
                 retry_delay=1.0,

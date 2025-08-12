@@ -1,5 +1,8 @@
+import json
 import logging
+import re
 import time
+from typing import Generator, List
 
 import requests
 
@@ -19,7 +22,7 @@ if not logger.handlers:
 
 
 class LLMClient:
-    """HTTP client for LLM API with long polling support"""
+    """HTTP client for LLM API with long polling and streaming support"""
 
     def __init__(self, base_url: str, timeout: int = 300):
         self.base_url = base_url.rstrip("/")
@@ -46,7 +49,79 @@ class LLMClient:
             logger.error(f"Error validating models response: {e}")
             raise
 
-    def generate_text(self, prompt: str, model: str = "llama3:8b", stream: bool = False) -> LLMGenerateResponse:
+    def generate_text_stream(
+        self,
+        prompt: str,
+        model: str = "llama3:8b",
+        images: List[str] = None,
+    ) -> Generator[str, None, None]:
+        """
+        Generate text using the LLM API with streaming
+
+        Args:
+            prompt: The input prompt
+            model: The model to use for generation
+            images: Optional list of base64 encoded images for vision models
+
+        Yields:
+            Generated text chunks as they become available
+        """
+        # Validate request with Pydantic schema
+        request_data = LLMGenerateRequest(model=model, prompt=prompt, stream=True, images=images)
+
+        try:
+            logger.info(f"Sending streaming request to LLM API: {self.base_url}/api/generate")
+
+            response = self.session.post(
+                f"{self.base_url}/api/generate",
+                json=request_data.model_dump(),
+                timeout=self.timeout,
+                stream=True,  # Enable streaming
+            )
+            response.raise_for_status()
+
+            # Process streaming response
+            for line in response.iter_lines():
+                if line:
+                    try:
+                        # Parse JSON from each line
+                        data = json.loads(line.decode("utf-8"))
+
+                        # Extract response text from streaming data
+                        if "response" in data:
+                            chunk = data["response"]
+                            if chunk:
+                                yield chunk
+
+                        # Check if generation is complete
+                        if data.get("done", False):
+                            logger.info("Streaming generation completed")
+                            break
+
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Failed to parse streaming response: {e}")
+                        continue
+                    except Exception as e:
+                        logger.error(f"Error processing streaming chunk: {e}")
+                        continue
+
+        except requests.exceptions.Timeout:
+            logger.error("LLM API streaming request timed out")
+            raise TimeoutError("LLM API streaming request timed out")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error calling LLM API streaming: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error in streaming generation: {e}")
+            raise
+
+    def generate_text(
+        self,
+        prompt: str,
+        model: str = "llama3:8b",
+        stream: bool = False,
+        images: List[str] = None,
+    ) -> LLMGenerateResponse:
         """
         Generate text using the LLM API with long polling
 
@@ -54,12 +129,13 @@ class LLMClient:
             prompt: The input prompt
             model: The model to use for generation
             stream: Whether to stream the response
+            images: Optional list of base64 encoded images for vision models
 
         Returns:
             LLMGenerateResponse containing the generated response
         """
         # Validate request with Pydantic schema
-        request_data = LLMGenerateRequest(model=model, prompt=prompt, stream=stream)
+        request_data = LLMGenerateRequest(model=model, prompt=prompt, stream=stream, images=images)
 
         try:
             logger.info(f"Sending request to LLM API: {self.base_url}/api/generate")
@@ -94,6 +170,7 @@ class LLMClient:
         model: str = "llama3:8b",
         max_retries: int = 3,
         retry_delay: float = 1.0,
+        images: List[str] = None,
     ) -> str:
         """
         Generate text with long polling and retry logic
@@ -103,6 +180,7 @@ class LLMClient:
             model: The model to use for generation
             max_retries: Maximum number of retries
             retry_delay: Delay between retries in seconds
+            images: Optional list of base64 encoded images for vision models
 
         Returns:
             Generated text response
@@ -111,7 +189,7 @@ class LLMClient:
             try:
                 logger.info(f"Attempt {attempt + 1}/{max_retries} to generate text")
 
-                result = self.generate_text(prompt, model, stream=False)
+                result = self.generate_text(prompt, model, stream=False, images=images)
 
                 # Extract the response text from the validated result
                 if result.done and result.response:
@@ -134,16 +212,134 @@ class LLMClient:
                     logger.error(f"All {max_retries} attempts failed")
                     raise
 
-    def generate_reflection_and_weight(
+    def generate_reflection_and_weight_stream(
         self,
         memory_content: str,
         tone: str = "empathetic",
         model: str = "llama3:8b",
         max_retries: int = 3,
         retry_delay: float = 1.0,
-    ) -> tuple[str, int]:
+        image_base64: str = None,
+    ) -> Generator[dict, None, None]:
         """
-        Generate both reflection and weight in a single LLM call
+        Generate both reflection and weight with streaming support, improved whitespace handling.
+
+        Args:
+            memory_content: The memory content to analyze
+            tone: The AI confidant tone (empathetic, supportive, analytical, casual,
+            professional, Happy, Sad, Angry, Harsh etc)
+            model: The model to use for generation
+            max_retries: Maximum number of retries
+            retry_delay: Delay between retries in seconds
+            image_base64: Optional base64 string of an attached image
+
+        Yields:
+            Dictionary with streaming data: {"type": "chunk", "content": "...", "done": False}
+        """
+        # Check if this is a vision model
+        is_vision_model = any(
+            vision_model in model.lower()
+            for vision_model in ["vision", "llava", "llama3.1", "claude", "gpt-4v", "gemini"]
+        )
+
+        if is_vision_model and image_base64:
+            # For vision models, pass images separately and don't include in prompt
+            prompt = self._generate_ai_confidant_prompt(memory_content, tone)
+            images = [image_base64]
+        else:
+            # For text-only models, include image as base64 in prompt (current behavior)
+            prompt = self._generate_ai_confidant_prompt(memory_content, tone, image_base64=image_base64)
+            images = None
+
+        print("Prompt", prompt)
+
+        for attempt in range(max_retries):
+            try:
+                # Use streaming method with buffer to catch weight text that spans chunks
+                full_response = ""
+                buffer = ""
+                for chunk in self.generate_text_stream(prompt=prompt, model=model, images=images):
+                    full_response += chunk
+                    buffer += chunk
+
+                    # Remove ANY text containing "weight" (case insensitive)
+                    filtered_buffer = re.sub(r"[^.]*weight[^.]*\.?", "", buffer, flags=re.IGNORECASE)
+
+                    # Remove "weighs in at" and similar phrases
+                    filtered_buffer = re.sub(r"[^.]*weighs?[^.]*\.?", "", filtered_buffer, flags=re.IGNORECASE)
+
+                    # Remove tags section (TAGS: tag1, tag2, tag3)
+                    filtered_buffer = re.sub(r"TAGS:\s*.+", "", filtered_buffer, flags=re.IGNORECASE)
+
+                    # Also remove standalone numbers 1-10 that might be weight indicators
+                    filtered_buffer = re.sub(r"\b([1-9]|10)\b", "", filtered_buffer)
+
+                    # Remove leftover asterisks from bold formatting
+                    filtered_buffer = re.sub(r"\*+$", "", filtered_buffer)
+
+                    # Check for non-empty, non-whitespace content
+                    if filtered_buffer.strip():
+                        yield {
+                            "type": "chunk",
+                            "content": filtered_buffer,
+                            "done": False,
+                            "attempt": attempt + 1,
+                            "tone": tone,
+                        }
+                        buffer = ""
+
+                # After the streaming loop completes, process the full response
+                if full_response:
+                    reflection, weight, tags = self._extract_reflection_weight_and_tags(full_response)
+                    reflection = re.sub(r"[^.]*weight[^.]*\.?", "", reflection, flags=re.IGNORECASE)
+                    reflection = re.sub(r"[^.]*weighs?[^.]*\.?", "", reflection, flags=re.IGNORECASE)
+                    reflection = re.sub(r"\b([1-9]|10)\b", "", reflection)
+                    reflection = re.sub(r"\*+$", "", reflection)
+
+                    yield {
+                        "type": "complete",
+                        "reflection": reflection,
+                        "weight": weight,
+                        "tags": tags,
+                        "done": True,
+                        "attempt": attempt + 1,
+                        "tone": tone,
+                    }
+                    return
+                else:
+                    logger.warning("Streaming generation returned empty response")
+                    yield {
+                        "type": "complete",
+                        "reflection": "",
+                        "weight": 0,
+                        "tags": [],
+                        "done": True,
+                        "attempt": attempt + 1,
+                        "tone": tone,
+                    }
+                    return
+
+            except (requests.exceptions.RequestException, TimeoutError, ValueError) as e:
+                logger.warning(f"Attempt {attempt + 1} failed: {e}")
+                yield {"type": "error", "error": str(e), "attempt": attempt + 1, "done": True}
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    logger.error(f"All {max_retries} attempts failed")
+                    raise
+
+    def generate_reflection_weight_and_tags(
+        self,
+        memory_content: str,
+        tone: str = "empathetic",
+        model: str = "llama3:8b",
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
+        image_base64: str = None,
+    ) -> tuple[str, int, list[str]]:
+        """
+        Generate reflection, weight, and tags in a single LLM call
 
         Args:
             memory_content: The memory content to analyze
@@ -151,11 +347,25 @@ class LLMClient:
             model: The model to use for generation
             max_retries: Maximum number of retries
             retry_delay: Delay between retries in seconds
+            image_base64: Optional base64 string of an attached image
 
         Returns:
-            Tuple of (reflection_text, weight_number)
+            Tuple of (reflection_text, weight_number, tags_list)
         """
-        prompt = self._generate_ai_confidant_prompt(memory_content, tone)
+        # Check if this is a vision model
+        is_vision_model = any(
+            vision_model in model.lower()
+            for vision_model in ["vision", "llava", "llama3.1", "claude", "gpt-4v", "gemini"]
+        )
+
+        if is_vision_model and image_base64:
+            # For vision models, pass images separately and don't include in prompt
+            prompt = self._generate_ai_confidant_prompt(memory_content, tone)
+            images = [image_base64]
+        else:
+            # For text-only models, include image as base64 in prompt (current behavior)
+            prompt = self._generate_ai_confidant_prompt(memory_content, tone, image_base64=image_base64)
+            images = None
 
         for attempt in range(max_retries):
             try:
@@ -165,14 +375,15 @@ class LLMClient:
                 result = self.generate_with_long_polling(
                     prompt=prompt,
                     model=model,
-                    max_retries=1,  # Single attempt since we're already in retry loop
+                    max_retries=1,
                     retry_delay=retry_delay,
+                    images=images,
                 )
 
                 if result:
                     logger.info(f"Successfully generated reflection and weight with {len(result)} characters")
-                    reflection, weight = self._extract_reflection_and_weight(result)
-                    return reflection, weight
+                    reflection, weight, tags = self._extract_reflection_weight_and_tags(result)
+                    return reflection, weight, tags
                 else:
                     logger.warning("Generation returned empty response")
                     if attempt < max_retries - 1:
@@ -190,50 +401,59 @@ class LLMClient:
                     logger.error(f"All {max_retries} attempts failed")
                     raise
 
-    def _extract_reflection_and_weight(self, response: str) -> tuple[str, int]:
-        """Extract reflection text and weight number from LLM response"""
+    def _extract_reflection_weight_and_tags(self, response: str) -> tuple[str, int, list[str]]:
+        """Extract reflection text, weight number, and tags from LLM response"""
         try:
             logger.info(f"Raw LLM response: {response}")
-            lines = response.strip().split("\n")
-            reflection_lines = []
+
+            # Look for various weight patterns in the response
             weight = 0
+            tags = []
+            reflection = response.strip()
 
-            logger.info(f"Processing {len(lines)} lines from response")
+            # Extract tags first (TAGS: tag1, tag2, tag3)
+            tags_match = re.search(r"TAGS:\s*(.+)", response, re.IGNORECASE)
+            if tags_match:
+                tags_text = tags_match.group(1).strip()
+                # Split by comma and clean up each tag
+                tags = [tag.strip() for tag in tags_text.split(",") if tag.strip()]
+                logger.info(f"Found tags: {tags}")
+                # Remove the tags section from reflection
+                reflection = re.sub(r"TAGS:\s*.+", "", reflection, flags=re.IGNORECASE)
 
-            for i, line in enumerate(lines):
-                line = line.strip()
-                logger.info(f"Line {i}: '{line}'")
+            # Pattern 1: "Weight: X" or "**Weight: X**"
+            weight_match = re.search(r"\*?\*?Weight:\s*(\d+)\*?\*?", response, re.IGNORECASE)
+            if weight_match:
+                weight = int(weight_match.group(1))
+                logger.info(f"Found weight pattern 1: {weight}")
+                # Remove the weight pattern
+                reflection = re.sub(r"\*?\*?Weight:\s*\d+\*?\*?", "", reflection, flags=re.IGNORECASE)
 
-                if line.startswith("REFLECTION:"):
-                    logger.info("Found REFLECTION: marker")
-                    # Start collecting reflection text
-                    continue
-                elif line.startswith("WEIGHT:"):
-                    logger.info(f"Found WEIGHT: marker in line: '{line}'")
-                    # Extract weight number
-                    weight_text = line.replace("WEIGHT:", "").strip()
-                    logger.info(f"Weight text after cleanup: '{weight_text}'")
-                    import re
+            # Pattern 2: "This memory holds a weight of X"
+            if weight == 0:
+                weight_match = re.search(r"This memory holds a weight of (\d+)", response, re.IGNORECASE)
+                if weight_match:
+                    weight = int(weight_match.group(1))
+                    logger.info(f"Found weight pattern 2: {weight}")
+                    # Remove the weight pattern
+                    reflection = re.sub(r"This memory holds a weight of \d+\.?", "", reflection, flags=re.IGNORECASE)
 
-                    numbers = re.findall(r"\b\d+\b", weight_text)
-                    logger.info(f"Found numbers: {numbers}")
-                    if numbers:
-                        weight = int(numbers[0])
-                        logger.info(f"Extracted weight: {weight}")
-                        if not (1 <= weight <= 10):
-                            logger.warning(f"Weight {weight} out of range, using default 5")
-                            weight = 5
-                    else:
-                        logger.warning("No numbers found in WEIGHT line")
-                    break
-                elif (
-                    line and not line.startswith("Weight Guidelines") and not line.startswith("Consider these factors")
-                ):
-                    # Add to reflection if it's not a header
-                    reflection_lines.append(line)
-                    logger.info(f"Added to reflection: '{line}'")
+            # Pattern 3: Standalone number at the end (1-10)
+            if weight == 0:
+                weight_match = re.search(r"\b([1-9]|10)\s*$", response.strip())
+                if weight_match:
+                    weight = int(weight_match.group(1))
+                    logger.info(f"Found weight pattern 3: {weight}")
+                    # Remove the number at the end
+                    reflection = re.sub(r"\b([1-9]|10)\s*$", "", reflection.strip())
 
-            reflection = "\n".join(reflection_lines).strip()
+            # Validate weight range
+            if weight > 0 and not (1 <= weight <= 10):
+                logger.warning(f"Weight {weight} out of range, using default 0")
+                weight = 0
+
+            # Final cleanup of reflection
+            reflection = reflection.strip()
 
             # If no reflection was extracted, use the full response
             if not reflection:
@@ -242,23 +462,32 @@ class LLMClient:
 
             logger.info(f"Final extracted reflection ({len(reflection)} chars): {reflection[:100]}...")
             logger.info(f"Final extracted weight: {weight}")
-            return reflection, weight
+            logger.info(f"Final extracted tags: {tags}")
+            return reflection, weight, tags
 
         except Exception as e:
-            logger.error(f"Error extracting reflection and weight from response: {e}")
-            return response.strip(), 5
+            logger.error(f"Error extracting reflection, weight, and tags from response: {e}")
+            return response.strip(), 0, []
 
-    def _generate_ai_confidant_prompt(self, memory_content: str, tone: str = "empathetic") -> str:
+    def _generate_ai_confidant_prompt(
+        self,
+        memory_content: str,
+        tone: str = "empathetic",
+        image_base64: str = None,
+    ) -> str:
         """
         Generate AI confidant prompt for memory reflection and weighting
 
         Args:
             memory_content: The memory content to analyze
-            tone: The AI confidant tone
+            tone: The AI confidant tone  (empathetic, supportive, analytical, casual,
+            professional, Happy, Sad, Angry, Harsh etc)
+            image_base64: Optional base64 string of an attached image
 
         Returns:
             Formatted prompt string
         """
+        image_section = f"\nAttached image (base64): {image_base64}\n" if image_base64 else ""
         return f"""
     You are WhisperCore, an AI confidant designed to help users process
     their daily experiences with emotional intelligence and personal growth insights.
@@ -273,11 +502,9 @@ class LLMClient:
 
     Memory to reflect on: {memory_content}
     Your tone: {tone}
+    {image_section}
 
-    Please respond in the following format:
-
-    REFLECTION:
-    [As WhisperCore, provide a {tone} reflection on this memory. Consider:
+    Please provide a {tone} reflection on this memory. Consider:
     - The emotional journey and impact of this experience
     - What this reveals about the user's values, growth, or patterns
     - Potential insights or learning opportunities
@@ -287,14 +514,15 @@ class LLMClient:
     Keep your response warm, insightful, and focused on the user's personal growth.
     Avoid generic advice - make it feel like you truly understand their unique experience.
 
-    WEIGHT: [number]
-
     Weight Guidelines (1-10):
-    - 1-2: Minor daily events, routine activities, simple pleasures
-    - 3-4: Regular experiences with mild emotions, small wins or challenges
-    - 5-6: Notable experiences with moderate emotions, learning moments
-    - 7-8: Significant events with strong emotions, important insights or achievements
-    - 9-10: Life-changing events, major achievements, profound insights, or deeply meaningful moments
+    - 1-2: Minor daily events, routine activities, simple pleasures, Sad, Angry, Harsh
+    - 3-4: Regular experiences with mild emotions, small wins or challenges, Happy, Sad, Angry, Harsh
+    - 5-6: Notable experiences with moderate emotions,
+    learning moments, Happy, Sad, Angry, Harsh
+    - 7-8: Significant events with strong emotions,
+    important insights or achievements, Happy, Sad, Angry, Harsh
+    - 9-10: Life-changing events, major achievements,
+    profound insights, or deeply meaningful moments, Happy, Sad, Angry, Harsh
 
     Consider these factors when assigning weight:
     - Emotional intensity and depth of feeling
@@ -304,7 +532,14 @@ class LLMClient:
     - Achievement or milestone value
     - How this moment contributes to their overall well-being
 
-    Return only the reflection text and weight number in the exact format above.
+    TAGS: After your reflection, provide 3-5 relevant tags
+    that capture the key themes, emotions, or categories of this memory.
+    Use simple, descriptive words or short phrases separated by commas.
+
+    FORMAT:
+    1. Write your reflection
+    2. Add a single number (1-10) for weight
+    3. Add tags in format: TAGS: tag1, tag2, tag3
     """
 
     def health_check(self) -> bool:
@@ -312,9 +547,8 @@ class LLMClient:
         try:
             response = self.session.get(f"{self.base_url}/api/tags", timeout=10)
             if response.status_code == 200:
-                # Try to validate the response
                 data = response.json()
-                LLMModelsResponse(**data)  # This will raise if invalid
+                LLMModelsResponse(**data)
                 return True
             return False
         except (requests.exceptions.RequestException, Exception):
