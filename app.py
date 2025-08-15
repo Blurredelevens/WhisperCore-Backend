@@ -72,6 +72,7 @@ def create_app(config_class=EnvConfig):
 
     # Register blueprints (routes only, no views)
     from routes.auth import auth_bp
+    from routes.health import health_bp
     from routes.memory import memory_bp
     from routes.memory_weighting import memory_weighting_bp
     from routes.notification import notification_bp
@@ -82,6 +83,7 @@ def create_app(config_class=EnvConfig):
     from routes.task import task_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
+    app.register_blueprint(health_bp, url_prefix="/api")
     app.register_blueprint(memory_bp, url_prefix="/api/memories")
     app.register_blueprint(memory_weighting_bp, url_prefix="/api/memory-weighting")
     app.register_blueprint(notification_bp, url_prefix="/api/notifications")
